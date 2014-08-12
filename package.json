@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "main": "./module.js",
   "description": "A simple micro-services framework for Node.js.",
-  "repository": "https://github.com/fwestrom/medseek-util-microservices.git",
+  "repository": "https://github.com/medseek-engineering/medseek-util-microservices.git",
   "dependencies": {
     "amqplib": "^0.2.0",
     "node-uuid": "^1.4.1",
