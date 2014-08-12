@@ -8,8 +8,11 @@ microservices.useTransport(microservices.AmqpTransport, { defaultExchange: 'topi
 microservices
     .bind('topic://example/ping.v1')
     .subscribe(function(messageContext) {
-        var body = messageContext.body;
-        var reply = body.replace('PING', 'PONG');
-        util.log('[Example.ping-listener] Body: ' + body + ', sending reply: ' + reply + '.');
-        messageContext.reply(reply);
+        util.log('[Example.ping-listener] Message Context: ' + JSON.stringify(messageContext));
+
+        var reply = messageContext.body.replace('PING', 'PONG');
+        util.log('[Example.ping-listener] Body: ' + messageContext.body + ', Reply Body: ' + reply);
+        messageContext.reply(reply, {
+            'custom-2': 'custom-2'
+        });
     });

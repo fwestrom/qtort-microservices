@@ -4,7 +4,6 @@ var events = require('events');
 var rx = require('rx');
 var util = require('util');
 var uuid = require('node-uuid');
-var microservices = require('./');
 var messageContext = require('./messageContext.js');
 var serializer = require('./serializer.js');
 
@@ -107,8 +106,13 @@ function AmqpTransport(options)
     var sendInternal = function(address, bodyObject, properties) {
         var options = {
             contentType: properties && properties.contentType ? properties.contentType : 'application/json',
-            replyTo: properties && properties.replyTo ? properties.replyTo : undefined
+            replyTo: properties && properties.replyTo ? properties.replyTo : undefined,
+            headers: {}
         };
+        for (var key in properties) {
+            if (properties.hasOwnProperty(key) && key != 'contentType' && key != 'replyTo' && key != 'routingKey')
+                options.headers[key] = properties[key];
+        }
         var body = serializer.serialize(options.contentType, bodyObject);
         util.log('[AmqpTransport.send] Sending; to = ' + address + ", body = " + bodyObject.toString() + ", options = " + JSON.stringify(options) + '.');
         var sendAddress = this.parseAddress(address);
@@ -160,14 +164,18 @@ function AmqpTransport(options)
                     contentType: x.properties.contentType,
                     replyTo: x.properties.replyTo,
                     routingKey: x.fields.routingKey,
-                    reply: function(body) {
+                    reply: function(body, properties) {
                         if (!mc.properties.replyTo)
                             throw new Error('Cannot send a reply message when no reply-to destination exists on the original message.');
-                        sendInternal(mc.properties.replyTo, body, {
-                            contentType: mc.properties.contentType
-                        });
+                        properties.contentType = mc.properties.contentType;
+                        sendInternal(mc.properties.replyTo, body, properties);
                     }
                 });
+
+                for (var key in x.properties.headers) {
+                    if (x.properties.headers.hasOwnProperty(key))
+                        mc.properties[key] = x.properties.headers[key];
+                }
 
                 var currentMessageContextTemp = currentMessageContext;
                 currentMessageContext = mc;

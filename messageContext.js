@@ -21,6 +21,16 @@ function MessageContext(values) {
     if (!values)
         values = {};
 
+    /**
+     * The routing key used to route the message.
+     * @type {string}
+     */
+    Object.defineProperty(this, 'routingKey', {
+        value: values.routingKey,
+        enumerable: true,
+        writable: false
+    });
+
     var body = undefined;
     /**
      * Gets the deserialized message body.
@@ -29,7 +39,8 @@ function MessageContext(values) {
     Object.defineProperty(this, 'body', {
         get: function() {
             return body ? body : (body = serializer.deserialize(this.properties.contentType, this.bodyRaw));
-        }.bind(this)
+        }.bind(this),
+        enumerable: true
     });
 
     /**
@@ -38,6 +49,7 @@ function MessageContext(values) {
      */
     Object.defineProperty(this, 'bodyRaw', {
         value: values.body,
+        enumerable: true,
         writable: false
     });
 
@@ -47,6 +59,7 @@ function MessageContext(values) {
      */
     Object.defineProperty(this, 'properties', {
         value: {},
+        enumerable: true,
         writable: false
     });
 
@@ -56,6 +69,7 @@ function MessageContext(values) {
      */
     Object.defineProperty(this.properties, 'contentType', {
         value: values.contentType,
+        enumerable: true,
         writable: false
     });
 
@@ -65,6 +79,7 @@ function MessageContext(values) {
      */
     Object.defineProperty(this.properties, 'replyTo', {
         value: values.replyTo,
+        enumerable: true,
         writable: false
     });
 
@@ -74,15 +89,7 @@ function MessageContext(values) {
      */
     Object.defineProperty(this, 'reply', {
         value: values.reply,
-        writable: false
-    });
-
-    /**
-     * The routing key used to route the message.
-     * @type {string}
-     */
-    Object.defineProperty(this, 'routingKey', {
-        value: values.routingKey,
+        enumerable: false,
         writable: false
     });
 }

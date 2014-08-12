@@ -9,6 +9,7 @@ function ping(onReply) {
     microservices
         .bindReply(function(replyContext) {
             replyContext.subscribe(function(messageContext) {
+                util.log('[Example.ping-sender] Message Context: ' + JSON.stringify(messageContext));
                 util.log('[Example.ping-sender] Received reply: ' + messageContext.body);
                 replyContext.close();
                 if (onReply)
@@ -17,7 +18,9 @@ function ping(onReply) {
 
             var body = 'PING-' + ++i;
             util.log('[Example.ping-sender] Sending message: ' + body);
-            replyContext.send('topic://example/ping.v1', body);
+            replyContext.send('topic://example/ping.v1', body, {
+                'custom-1': 'value-1'
+            });
         });
 }
 
