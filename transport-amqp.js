@@ -271,6 +271,18 @@ function AmqpTransport(options)
     };
 
     /**
+     * Sends a message to the specified endpoint.
+     *
+     * @param {string} address The address of the destination endpoint.
+     * @param {Object} body The message body.
+     * @param {Object} properties Additional message properties.
+     * @api public
+     */
+    this.send = function(address, body, properties) {
+        sendInternal(address, body, properties);
+    };
+
+    /**
      * Starts the transport.
      *
      * @api public

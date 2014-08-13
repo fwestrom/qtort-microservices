@@ -12,9 +12,6 @@ describe('module', function() {
     var transportDisposable = undefined;
     beforeEach(function() {
         microservices = require('../');
-        util.log('\n\n[moduleTests.module] microservices = \n' + microservices);
-        util.log('\n\n[moduleTests.module] microservices = \n' + JSON.stringify(microservices));
-        util.log('\n\n');
 
         function TestTransport () {
             this.onNext = undefined;
@@ -110,5 +107,34 @@ describe('module', function() {
             items[0].should.be
                 .exactly(value);
         });
+    });
+
+    describe('send', function() {
+
+        it('returns value from transport', function() {
+            var transportResult = {};
+            transport.send = function() { return transportResult };
+
+            var result = microservices.send();
+
+            result.should.be
+                .exactly(transportResult);
+        });
+
+        it('invokes transport.send', function() {
+            var invokeArgs = undefined;
+            transport.send = function(a, b, c) { invokeArgs = { a: a, b: b, c: c }; };
+
+            var args = { a: {}, b: {}, c: {} };
+            microservices.send(args.a, args.b, args.c);
+
+            invokeArgs.a.should.be
+                .exactly(args.a);
+            invokeArgs.b.should.be
+                .exactly(args.b);
+            invokeArgs.c.should.be
+                .exactly(args.c);
+        });
+
     });
 });

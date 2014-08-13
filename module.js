@@ -1,6 +1,5 @@
 "use strict";
 
-var q = require('q');
 var rx = require('rx');
 var util = require('util');
 
@@ -96,6 +95,18 @@ module.exports.bind = function(address) {
  */
 module.exports.bindReply = function(actionToBind) {
     return me.transport.bindReply(actionToBind);
+};
+
+/**
+ * Sends a message to the specified endpoint.
+ *
+ * @param {string} address The address of the destination endpoint.
+ * @param {Object} body The message body.
+ * @param {Object} properties Additional message properties.
+ * @api public
+ */
+module.exports.send = function(address, body, properties) {
+    return me.transport.send(address, body, properties);
 };
 
 /**
