@@ -167,6 +167,8 @@ function AmqpTransport(options)
                     reply: function(body, properties) {
                         if (!mc.properties.replyTo)
                             throw new Error('Cannot send a reply message when no reply-to destination exists on the original message.');
+                        if (!properties)
+                            properties = {};
                         properties.contentType = mc.properties.contentType;
                         sendInternal(mc.properties.replyTo, body, properties);
                     }
@@ -271,12 +273,38 @@ function AmqpTransport(options)
     };
 
     /**
+     * Sends a message to the specified endpoint.
+     *
+     * @param {string} address The address of the destination endpoint.
+     * @param {Object} body The message body.
+     * @param {Object} properties Additional message properties.
+     * @api public
+     */
+    this.send = function(address, body, properties) {
+        sendInternal(address, body, properties);
+    };
+
+    /**
      * Starts the transport.
      *
      * @api public
      */
     this.start = function() {
-        return amqplib.connect('amqp://localhost')
+        var brokerAddress = 'amqp://localhost';
+        for (var i = 2; i < process.argv.length; i++) {
+            var arg = process.argv[i];
+            var index = arg.search(/^[-/]broker([=:].+)?$/i);
+            if (index == 0) {
+                index = arg.search(/[=:]/);
+                if (index >= 0 || i < process.argv.length -1) {
+                    brokerAddress = index >= 0 ? arg.substr(index + 1) : process.argv[i + 1];
+                    break;
+                }
+            }
+        }
+
+        util.log('[AmqpTransport.start] Broker: ' + brokerAddress);
+        return amqplib.connect(brokerAddress)
             .then(function(newConnection) {
                 process.once('SIGINT', this.stop.bind(this));
                 connection = newConnection;
