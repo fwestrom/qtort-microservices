@@ -167,6 +167,8 @@ function AmqpTransport(options)
                     reply: function(body, properties) {
                         if (!mc.properties.replyTo)
                             throw new Error('Cannot send a reply message when no reply-to destination exists on the original message.');
+                        if (!properties)
+                            properties = {};
                         properties.contentType = mc.properties.contentType;
                         sendInternal(mc.properties.replyTo, body, properties);
                     }

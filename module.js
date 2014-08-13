@@ -102,7 +102,7 @@ module.exports.bindReply = function(actionToBind) {
  *
  * @param {string} address The address of the destination endpoint.
  * @param {Object} body The message body.
- * @param {Object} properties Additional message properties.
+ * @param {Object} [properties] Additional message properties.
  * @api public
  */
 module.exports.send = function(address, body, properties) {
