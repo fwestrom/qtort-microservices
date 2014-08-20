@@ -292,7 +292,7 @@ function AmqpTransport(options) {
     this.start = function() {
         var brokerAddress = 'amqp://localhost';
         
-        if(!options.broker) {
+        if(options.broker) {
             brokerAddress = options.broker;
         } else {
             for (var i = 2; i < process.argv.length; i++) {
