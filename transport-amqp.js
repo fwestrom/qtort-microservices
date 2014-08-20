@@ -23,10 +23,10 @@ util.inherits(AmqpTransport, events.EventEmitter);
  * @this {AmqpTransport}
  * @param options Options for configuring the transport.
  * @param options.defaultExchange The default exchange.
+ * @param options.broker The optional broker.
  * @param [options.amqplib] An optional amqplib to use instead of the default module.
  */
-function AmqpTransport(options)
-{
+function AmqpTransport(options) {
     var amqplib = options && options.amqplib ? options.amqplib : require('amqplib');
     var defaultExchange = options.defaultExchange;
 
@@ -291,18 +291,22 @@ function AmqpTransport(options)
      */
     this.start = function() {
         var brokerAddress = 'amqp://localhost';
-        for (var i = 2; i < process.argv.length; i++) {
-            var arg = process.argv[i];
-            var index = arg.search(/^[-/]broker([=:].+)?$/i);
-            if (index == 0) {
-                index = arg.search(/[=:]/);
-                if (index >= 0 || i < process.argv.length -1) {
-                    brokerAddress = index >= 0 ? arg.substr(index + 1) : process.argv[i + 1];
-                    break;
+        
+        if(!options.broker) {
+            brokerAddress = options.broker;
+        } else {
+            for (var i = 2; i < process.argv.length; i++) {
+                var arg = process.argv[i];
+                var index = arg.search(/^[-/]broker([=:].+)?$/i);
+                if (index == 0) {
+                    index = arg.search(/[=:]/);
+                    if (index >= 0 || i < process.argv.length -1) {
+                        brokerAddress = index >= 0 ? arg.substr(index + 1) : process.argv[i + 1];
+                        break;
+                    }
                 }
             }
         }
-
         util.log('[AmqpTransport.start] Broker: ' + brokerAddress);
         return amqplib.connect(brokerAddress)
             .then(function(newConnection) {
