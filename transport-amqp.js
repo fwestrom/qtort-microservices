@@ -80,6 +80,18 @@ function AmqpTransport(options) {
         return result;
     };
 
+    this.isMatch = function(parsedAddress, messageContext) {
+        util.log('ParsedAddress = ' + util.inspect(parsedAddress, { colors: true }));
+        util.log('MessageContext.RoutingKey = ' + messageContext.routingKey);
+        var regex = new RegExp(
+            '^' + parsedAddress.routingKey
+                .replace('.', '\\.')
+                .replace('*', '[^\\.]*')
+                .replace('#', '.*')
+                + '$');
+        return regex.test(messageContext.routingKey);
+    };
+
     var addDescriptor = function(address) {
         var ep = this.parseAddress(address);
         if (ep) {

@@ -76,6 +76,52 @@ describe('transport-amqp', function() {
         });
     });
 
+    describe('isMatch', function() {
+        describe('no-match', function() {
+            var cases = [
+                [ "topic://medseek-api/A.B.C", "A.B.C.D" ],
+                [ "topic://medseek-api/A.B.C.D", "A.B.C" ],
+                [ "topic://medseek-api/A.*.C.D", "A.B.X.D" ],
+                [ "topic://medseek-api/A.X.C.D", "A.B.C.D" ],
+                [ "topic://medseek-api/A.#.C.D", "A.B.C.B.D" ],
+                [ "topic://medseek-api/A.#.C.D", "A1.B.C.D" ],
+                [ "topic://medseek-api/A.B.#", "A.B" ],
+                [ "topic://medseek-api/A.B.*", "A.B.X.D" ]
+            ];
+
+            cases.forEach(function(x) {
+                var address = x[0];
+                var routingKey = x[1];
+                it(address + ' ? ' + routingKey, function() {
+                    var parsedAddress = transport.parseAddress(address);
+                    var result = transport.isMatch(parsedAddress, { routingKey: routingKey });
+                    result.should.be
+                        .eql(false);
+                });
+            });
+        });
+
+        describe('is-match', function() {
+            var cases = [
+                [ "topic://medseek-api/A.B.C.D", "A.B.C.D" ],
+                [ "topic://medseek-api/A.#.C.D", "A.B.C.D" ],
+                [ "topic://medseek-api/A.#.C.D", "A.B1.B2.B3.C.D" ],
+                [ "topic://medseek-api/A.B.*.D", "A.B.X.D" ]
+            ];
+
+            cases.forEach(function(x) {
+                var address = x[0];
+                var routingKey = x[1];
+                it(address + ' ? ' + routingKey, function() {
+                    var parsedAddress = transport.parseAddress(address);
+                    var result = transport.isMatch(parsedAddress, { routingKey: routingKey });
+                    result.should.be
+                        .eql(true);
+                });
+            });
+        });
+    });
+
     describe('bind', function() {
         // TODO: Write tests for bind once its functionality is understood.
     });
