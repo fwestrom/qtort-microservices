@@ -1,45 +1,46 @@
 "use strict";
 
-var events = require('events');
 var rx = require('rx');
-var util = require('util');
+var should = require('should');
+var sinon = require('sinon');
+var when = require('when');
 
 describe('module', function() {
-    var bindAddress = 'topic://tests/abc';
-    var transport = undefined;
-    var microservices = undefined;
+    var a = { 1: 1 }, b = { 2: 2 }, c = { 3: 3 }, d = { 4: 4 };
+    var act, actThenVerify;
+    var action;
+    var expectStart;
+    var expectStop;
+    var messageContext;
+    var microservices;
+    var observable;
+    var transport;
+    var transportDisposable;
+    var transportObj;
+    var value1, value2;
 
-    var transportDisposable = undefined;
     beforeEach(function() {
+        action = sinon.mock();
+        messageContext = { properties: { replyTo: undefined }, reply: undefined, routingKey: 'a.b.c.d', custom1: 123 };
         microservices = require('../');
+        observable = new rx.Subject();
+        transportObj = new (require('../transport.js'))('Test-Transport', { debug: true });
+        transport = sinon.mock(transportObj);
+        value1 = { a: Math.random() };
+        value2 = { b: Math.random() };
+        expectStart = transport.expects('start');
+        expectStop = transport.expects('stop');
 
-        function TestTransport () {
-            this.onNext = undefined;
-            this.onCompleted = undefined;
-            this.onError = undefined;
-            Object.defineProperty(this, 'name', { value: 'test-transport' });
-            this.bind = function(address) {
-                return rx.Observable.create(function(observer) {
-                    this.onNext = function(x) { observer.onNext(x); };
-                    this.onCompleted = function() { observer.onCompleted(); };
-                    this.onError = function(e) { observer.onError(e); };
-                }.bind(this));
-            };
-            this.bindReply = function(actionToBind) {
-                return rx.Observable.create(function(observer) {
-                    this.onNext = function(x) { observer.onNext(x); };
-                    this.onCompleted = function() { observer.onCompleted(); };
-                    this.onError = function(e) { observer.onError(e); };
-                }.bind(this));
-            };
-            this.start = function() { };
-            this.stop = function() { };
-        }
-        util.inherits(TestTransport, events.EventEmitter);
-        transport = new TestTransport();
+        transportDisposable = microservices.useTransport(transportObj);
 
-        transportDisposable = microservices.useTransport(transport);
+        act = function() { return when.resolve(); };
+        actThenVerify = function(toVerify) {
+            return act().then(function() {
+                toVerify.verify();
+            });
+        };
     });
+
     afterEach(function() {
         if (transportDisposable) {
             transportDisposable.dispose();
@@ -47,94 +48,183 @@ describe('module', function() {
         }
     });
 
+    describe('useTransport', function() {
+        it('invokes transport.start', function() {
+            return actThenVerify(expectStart);
+        });
+    });
+
     describe('bind', function() {
-
-        it('returns value from transport', function() {
-            var observable = rx.Observable.empty();
-            transport.bind = function() { return observable; };
-
-            var result = microservices.bind(bindAddress);
-            result.should.be
-                .exactly(observable);
+        var address;
+        var expectBind;
+        beforeEach(function() {
+            address = 'topic://tests/abc.123.def.' + Math.random();
+            expectBind = transport
+                .expects('bind')
+                .returns(when.resolve(observable));
         });
 
-        it('result.subscribe gets notifications from transport', function() {
-            var items = [];
-            microservices
-                .bind(bindAddress)
-                .subscribe(function(x) { items.push(x); });
+        describe('with address', function() {
+            beforeEach(function() {
+                act = function() {
+                    return microservices.bind(address)
+                        .then(function(result) {
+                            result.subscribe(action);
+                        });
+                };
+            });
 
-            var value = { testing: '123' };
-            transport.onNext(value);
+            describeOnMessageContextFromTransport(function() { return expectBind; });
 
-            items[0].should.be
-                .exactly(value);
+            it('invokes transport.bind(address)', function() {
+                expectBind.withArgs(address);
+                actThenVerify(expectBind);
+            });
+        });
+
+        describe('with address, action', function() {
+            beforeEach(function() {
+                act = function() {
+                    return microservices.bind(address, action);
+                };
+            });
+
+            describeOnMessageContextFromTransport(function() { return expectBind; }, function() {
+                it('invokes messageContext.reply with message handler result', function() {
+                    action.withArgs(messageContext).returns(value1);
+                    messageContext.reply = sinon.mock().withArgs(value1);
+                    return actThenVerify(messageContext.reply);
+                });
+            });
         });
     });
 
     describe('bindReply', function() {
-        var actionToBind = function() {};
-
-        it('actionToBind can be invoked by transport', function() {
-            var actionInvoked = false;
-            actionToBind = function() { actionInvoked = true; };
-            transport.bindReply = function(x) { x(); };
-
-            microservices.bindReply(actionToBind);
-
-            actionInvoked.should.be
-                .eql(true);
+        var expectBindReply = undefined;
+        var replyContext;
+        beforeEach(function() {
+            replyContext = observable;
+            replyContext.close = sinon.mock();
+            replyContext.send = sinon.mock();
+            expectBindReply = transport
+                .expects('bindReply')
+                .returns(when.resolve(replyContext));
         });
 
-        it('returns value from transport', function() {
-            var observable = rx.Observable.empty();
-            transport.bindReply = function() { return observable; };
+        describe('without arguments', function() {
+            beforeEach(function() {
+                act = function() {
+                    return microservices.bindReply()
+                        .then(function(replyContext) {
+                            replyContext.subscribe(action);
+                        });
+                };
+            });
 
-            var result = microservices.bindReply(actionToBind);
-            result.should.be
-                .exactly(observable);
+            describeOnMessageContextFromTransport(function() { return expectBindReply; });
+
+            it('invokes transport', function() {
+                return actThenVerify(expectBindReply);
+            });
         });
 
-        it('result.subscribe gets notifications from transport', function() {
-            var items = [];
-            microservices
-                .bindReply(actionToBind)
-                .subscribe(function(x) { items.push(x); });
+        describe('with replyAction', function() {
+            beforeEach(function() {
+                act = function() {
+                    return microservices.bindReply(action);
+                };
+            });
 
-            var value = { testing: '123' };
-            transport.onNext(value);
+            describeOnMessageContextFromTransport(function() { return expectBindReply; }, function() {
+                it('invokes messageContext.reply with message handler result', function() {
+                    action.withArgs(messageContext).returns(value1);
+                    messageContext.reply = sinon.mock().withArgs(value1);
+                    return actThenVerify(messageContext.reply);
+                });
+            });
 
-            items[0].should.be
-                .exactly(value);
+            it('invokes transport', function() {
+                return actThenVerify(expectBindReply);
+            });
+
+            it('returns promise for replyContext', function() {
+                return act().then(function(result) {
+                    result.should.have.property('close').exactly(replyContext.close);
+                    result.should.have.property('send').exactly(replyContext.send);
+                });
+            });
         });
     });
 
+    function describeOnMessageContextFromTransport(getBindMock, additionalTests) {
+        describe('on message context from transport', function() {
+            beforeEach(function() {
+                var promise = act();
+                act = function() {
+                    var bind = getBindMock();
+                    var callback = bind.getCall(0).args[1];
+                    if (!callback)
+                        callback = bind.getCall(0).args[0];
+                    return when.try(function() {
+                        callback(messageContext, {});
+                    });
+                };
+                return promise;
+            });
+
+            it('invokes subscriber with message contexts from transport', function() {
+                action.withArgs(messageContext);
+                return actThenVerify(action);
+            });
+
+            it('adds deserialize to message contexts from transport', function() {
+                return act().then(function() {
+                    messageContext
+                        .should.have.property('deserialize')
+                        .with.instanceOf(Function);
+                });
+            });
+
+            if (additionalTests)
+                additionalTests();
+        });
+    }
+
     describe('send', function() {
-
-        it('returns value from transport', function() {
-            var transportResult = {};
-            transport.send = function() { return transportResult };
-
-            var result = microservices.send();
-
-            result.should.be
-                .exactly(transportResult);
+        var expectSend = undefined;
+        var expectSendResult = { value: 2345 };
+        beforeEach(function() {
+            expectSend = transport
+                .expects('send')
+                .returns(when.resolve(expectSendResult));
+            act = function() {
+                return microservices.send(a, b, c);
+            };
         });
 
         it('invokes transport.send', function() {
-            var invokeArgs = undefined;
-            transport.send = function(a, b, c) { invokeArgs = { a: a, b: b, c: c }; };
-
-            var args = { a: {}, b: {}, c: {} };
-            microservices.send(args.a, args.b, args.c);
-
-            invokeArgs.a.should.be
-                .exactly(args.a);
-            invokeArgs.b.should.be
-                .exactly(args.b);
-            invokeArgs.c.should.be
-                .exactly(args.c);
+            expectSend.withArgs(a, b, c);
+            return actThenVerify(expectSend);
         });
 
+        it('returns value from transport', function() {
+            return act().then(function(result) {
+                should(result).be
+                    .exactly(expectSendResult);
+            });
+        });
+    });
+
+    describe('dispose', function() {
+        beforeEach(function() {
+            act = function() {
+                microservices.dispose();
+                return when.resolve();
+            };
+        });
+
+        it('stops transport', function() {
+            return actThenVerify(expectStop);
+        });
     });
 });

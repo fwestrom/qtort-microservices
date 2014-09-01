@@ -1,3 +1,4 @@
 --require should
 --reporter dot
+-R spec
 --ui bdd

@@ -5,7 +5,7 @@
  *
  * @returns Object The deserialized body object.
  */
-module.exports.deserialize = function(contentType, body) {
+exports.deserialize = function(contentType, body) {
     if (contentType == 'application/json')
         return JSON.parse(body.toString());
     if (contentType == 'text/plain')
@@ -18,7 +18,7 @@ module.exports.deserialize = function(contentType, body) {
  *
  * @returns Buffer The serialized body object.
  */
-module.exports.serialize = function(contentType, body) {
+exports.serialize = function(contentType, body) {
     if (contentType == 'application/json')
         return new Buffer(JSON.stringify(body));
     if (contentType == 'text/plain')
