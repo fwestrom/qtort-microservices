@@ -1,18 +1,18 @@
 "use strict";
 
 var microservices = require('../');
-var util = require('util');
-
-microservices.useTransport(microservices.AmqpTransport, { defaultExchange: 'topic://example' });
+if (!microservices.transport) {
+    microservices.useTransport(microservices.AmqpTransport, {
+        defaultExchange: 'topic://example',
+        debug: false
+    });
+}
 
 microservices
-    .bind('topic://example/ping.v1')
-    .subscribe(function(messageContext) {
-        util.log('[Example.ping-listener] Message Context: ' + JSON.stringify(messageContext));
-
-        var reply = messageContext.body.replace('PING', 'PONG');
-        util.log('[Example.ping-listener] Body: ' + messageContext.body + ', Reply Body: ' + reply);
-        messageContext.reply(reply, {
-            'custom-2': 'custom-2'
-        });
+    .bind('topic://example/ping.v1/example.ping.v1', function(messageContext) {
+        var body = messageContext.deserialize();
+        var reply = body.replace('PING', 'PONG');
+        //console.log('[Example.ping-listener] Body: ' + body + ', Reply Body: ' + reply);
+        //messageContext.reply(reply, { 'custom-2': 'custom-2' });
+        return reply;
     });
