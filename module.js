@@ -48,9 +48,11 @@ function MicroServicesModule(opts) {
 
         debug('addTransport', 'Using transport: ' + value.name);
         var disposable = rx.Disposable.create(disposeTransport);
-        process.on('SIGINT', disposeTransport);
+        process.on('SIGINT', function() {
+            disposeTransport();
+            process.exit();
+        });
         function disposeTransport() {
-            process.removeListener('SIGINT', disposeTransport);
             if (transport === value)
                 transport = undefined;
             value.stop();
