@@ -80,7 +80,7 @@ function MicroServicesModule(opts) {
                     };
                 }
                 var result = action(x);
-                if (x.reply && (!replied || result))
+                if (x.reply && !replied && result)
                     x.reply(result);
                 else if (result)
                     me.emit('error', new Error('Cannot send reply.'), x, result);
@@ -99,7 +99,7 @@ function MicroServicesModule(opts) {
             });
     };
 
-    this.bindReply = function(replyAction) {
+this.bindReply = function(replyAction) {
         var subject = new rx.Subject();
         var callback = function(x, replyContext) {
             debug('bindReply.onNext', 'Received: ' + x);
@@ -115,7 +115,7 @@ function MicroServicesModule(opts) {
                     };
                 }
                 var result = replyAction(x, replyContext);
-                if (x.reply && (!replied || result))
+                if (x.reply && !replied && result)
                     x.reply(result);
                 else if (result)
                     me.emit('error', new Error('Cannot send reply.'), x, result);
