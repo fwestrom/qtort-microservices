@@ -356,7 +356,7 @@ function AmqpTransport(options)
     }
 
     function start() {
-        var brokerAddress = 'amqp://localhost';
+        var brokerAddress = options.broker !== undefined ? options.broker : 'amqp://localhost';
         for (var i = 2; i < process.argv.length; i++) {
             var arg = process.argv[i];
             var index = arg.search(/^[-/]broker([=:].+)?$/i);
