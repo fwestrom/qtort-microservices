@@ -1,12 +1,6 @@
 "use strict";
 
-var microservices = require('../');
-if (!microservices.transport) {
-    microservices.useTransport(microservices.AmqpTransport, {
-        defaultExchange: 'topic://example',
-        debug: false
-    });
-}
+var microservices = require('./microservices.js');
 
 microservices
     .bind('topic://example/ping.v1/example.ping.v1', function(messageContext) {

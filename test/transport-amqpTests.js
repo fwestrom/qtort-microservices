@@ -2,6 +2,7 @@
 
 var rx = require('rx');
 var sinon = require('sinon');
+var uuid = require('node-uuid');
 var when = require('when');
 
 var AmqpTransport = require('../transport-amqp.js');
@@ -229,6 +230,56 @@ describe('transport-amqp', function() {
     });
 
     describe('on received from consumer', function() {
+    });
+
+    describe('Descriptor.matches', function() {
+
+        describe('topic exchange', function() {
+            var t = 'topic';
+
+            tc(t, 'a', 'a', true);
+            tc(t, 'a', 'a.b');
+            tc(t, 'a', 'x');
+            tc(t, 'a.b', 'a');
+            tc(t, 'a.b', 'a.b', true);
+            tc(t, 'a.b', 'a.b.c');
+            tc(t, 'a.b', 'a.x');
+
+            tc(t, 'a.*', 'a');
+            tc(t, 'a.*', 'a.b', true);
+            tc(t, 'a.*', 'a.b.c');
+            tc(t, 'a.*.c', 'a');
+            tc(t, 'a.*.c', 'a.b');
+            tc(t, 'a.*.c', 'a.b.c', true);
+            tc(t, 'a.*.c', 'a.b.c.d');
+
+            tc(t, 'a.#', 'a', true);
+            tc(t, 'a.#', 'a.b', true);
+            tc(t, 'a.#', 'a.b.c', true);
+            tc(t, 'a.#', 'x');
+            tc(t, 'a.#.z', 'a');
+            tc(t, 'a.#.z', 'a.b');
+            tc(t, 'a.#.z', 'a.b.c');
+            tc(t, 'a.#.z', 'a.b.z', true);
+            tc(t, 'a.#.z', 'a.b.c.z', true);
+            tc(t, 'a.#.z', 'a.b.c.d.z', true);
+            tc(t, 'a.#.z', 'a.x');
+            tc(t, 'a.#.z', 'a.z', true);
+            tc(t, 'a.#.z', 'x.z');
+        });
+
+        function tc(bindAddressExchangeType, bindAddressRoutingKey, receivedMessageRoutingKey, isMatch) {
+            it(bindAddressRoutingKey + ' | recv ' + receivedMessageRoutingKey + ' | ' + (isMatch ? 'match' : 'skip'), function() {
+                var bindAddress = bindAddressExchangeType + '://test-exchange/' + bindAddressRoutingKey;
+                var parsedAddress = transport.parseAddress(bindAddress);
+                var descriptor = new transport.Descriptor(parsedAddress);
+                var messageContext = { routingKey: receivedMessageRoutingKey };
+
+                var result = descriptor.matches(messageContext);
+
+                result.should.eql(isMatch === true);
+            });
+        }
     });
 
     describe('parseAddress', function() {

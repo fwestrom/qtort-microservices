@@ -77,8 +77,9 @@ function AmqpTransport(options)
 
     this.parseAddress = options.parseAddress || parseAddress;
 
+    this.Descriptor = Descriptor;
+
     var amqplib = options && options.amqplib ? options.amqplib : require('amqplib');
-    var defaultExchange = options.defaultExchange;
 
     var channel = undefined;
     var connection = undefined;
@@ -162,7 +163,7 @@ function AmqpTransport(options)
 
     function bindReply(callback) {
         var replyQueue = 'medseek-util-microservices.' + instanceId;
-        var addressPrefix = defaultExchange + '/' + replyQueue;
+        var addressPrefix = options.defaultExchange + '/' + replyQueue;
         return when.resolve(replyDescriptor)
             .then(function(descriptor) {
                 if (descriptor)
@@ -298,13 +299,7 @@ function AmqpTransport(options)
     }
 
     function isMatch(descriptor, messageContext) {
-        var regex = new RegExp(
-                '^' + descriptor.ep.routingKey
-                .replace('.', '\\.')
-                .replace('*', '[^\\.]*')
-                .replace('#', '.*')
-                + '$');
-        return regex.test(messageContext.routingKey);
+        return descriptor.matches(messageContext);
     }
 
     function parseAddress(value) {
@@ -359,7 +354,7 @@ function AmqpTransport(options)
         var brokerAddress = options.broker !== undefined ? options.broker : 'amqp://localhost';
         for (var i = 2; i < process.argv.length; i++) {
             var arg = process.argv[i];
-            var index = arg.search(/^[-/]broker([=:].+)?$/i);
+            var index = arg.search(/^([-/]|--)broker([=:].+)?$/i);
             if (index == 0) {
                 index = arg.search(/[=:]/);
                 if (index >= 0 || i < process.argv.length - 1) {
@@ -410,6 +405,7 @@ function AmqpTransport(options)
         this.isReply = isReply === true;
         this.ready = ready;
         this.close = close;
+        this.matches = matches;
 
         var me = this;
         function ready() {
@@ -419,6 +415,18 @@ function AmqpTransport(options)
         function close() {
             debug('Descriptor.close', 'Closing descriptor; ep:', me.ep);
             me.emit('close');
+        }
+
+        function matches(messageContext) {
+            var regex = me._matchesRegex || (me._matchesRegex =
+                new RegExp(
+                    '^' + me.ep.routingKey
+                    .replace('.', '\\.')
+                    .replace('*', '[^\\.]+')
+                    .replace('\\.#', '(\\.[^\\.]+)*')
+                    .replace('#\\.', '([^\\.]+\\.)*')
+                    + '$'));
+            return regex.test(messageContext.routingKey);
         }
     }
 }
