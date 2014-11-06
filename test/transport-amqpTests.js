@@ -266,6 +266,22 @@ describe('transport-amqp', function() {
             tc(t, 'a.#.z', 'a.x');
             tc(t, 'a.#.z', 'a.z', true);
             tc(t, 'a.#.z', 'x.z');
+            tc(t, 'a.b.#', 'a');
+            tc(t, 'a.b.#', 'a.b', true);
+            tc(t, 'a.b.#', 'a.b.c', true);
+            tc(t, 'a.b.#', 'a.b.c.d', true);
+            tc(t, 'a.b.#', 'a.x');
+            tc(t, 'a.b.#.z', 'a');
+            tc(t, 'a.b.#.z', 'a.b');
+            tc(t, 'a.b.#.z', 'a.b.c');
+            tc(t, 'a.b.#.z', 'a.b.c.d');
+            tc(t, 'a.b.#.z', 'a.b.c.z', true);
+            tc(t, 'a.b.#.z', 'a.b.c.d.z', true);
+            tc(t, 'a.b.#.z', 'a.b.c.d.e.z', true);
+            tc(t, 'a.b.#.z', 'a.b.c.x');
+            tc(t, 'a.b.#.z', 'a.b.c.z', true);
+            tc(t, 'a.b.#.z', 'a.b.z', true);
+            tc(t, 'a.b.#.z', 'a.x.z');
         });
 
         function tc(bindAddressExchangeType, bindAddressRoutingKey, receivedMessageRoutingKey, isMatch) {

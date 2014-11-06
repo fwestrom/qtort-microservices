@@ -195,39 +195,47 @@ function AmqpTransport(options)
         debug('consume', 'Consuming from queue; queue: ', consumeQueue);
         return channel
             .consume(consumeQueue, function(x) {
-                var fields = x.fields || {};
-                var properties = x.properties || {};
-                var mc = new messageContext.MessageContext({
-                    body: x.content,
-                    contentType: properties.contentType,
-                    replyTo: properties.replyTo,
-                    routingKey: fields.routingKey,
-                    reply: properties.replyTo ? function(body, replyProperties) {
-                        replyProperties = replyProperties || {};
-                        replyProperties.contentType = properties.contentType;
-                        debug('consume.reply.send', 'body = {0}, properties = {1}', body, replyProperties);
-                        send(properties.replyTo, body, replyProperties);
-                    } : undefined
-                });
-                for (var key in properties.headers)
-                    if (properties.headers.hasOwnProperty(key))
-                        mc.properties[key] = properties.headers[key];
                 try {
-                    var callbackCount = 0;
-                    for (var i = 0; i < descriptors.length; i++) {
-                        var d = descriptors[i];
-                        if (d.callback && d.ep.queue == consumeQueue && me.isMatch(d, mc)) {
-                            if (d.isReply)
-                                mc.replyContext = d;
-                            d.callback(mc, d);
-                            ++callbackCount;
+                    var fields = x.fields || {};
+                    var properties = x.properties || {};
+                    var mc = new messageContext.MessageContext({
+                        body: x.content,
+                        contentType: properties.contentType,
+                        replyTo: properties.replyTo,
+                        routingKey: fields.routingKey,
+                        reply: properties.replyTo ? function(body, replyProperties) {
+                            replyProperties = replyProperties || {};
+                            replyProperties.contentType = properties.contentType;
+                            debug('consume.reply.send', 'body = {0}, properties = {1}', body, replyProperties);
+                            send(properties.replyTo, body, replyProperties);
+                        } : undefined
+                    });
+                    for (var key in properties.headers)
+                        if (properties.headers.hasOwnProperty(key))
+                            mc.properties[key] = properties.headers[key];
+                    try {
+                        var callbackCount = 0;
+                        for (var i = 0; i < descriptors.length; i++) {
+                            var d = descriptors[i];
+                            if (d.callback && d.ep.queue == consumeQueue && me.isMatch(d, mc)) {
+                                if (d.isReply)
+                                    mc.replyContext = d;
+                                d.callback(mc, d);
+                                ++callbackCount;
+                            }
                         }
+                        if (callbackCount > 0)
+                            channel.ack(x);
+                        else
+                            me.emit('error', new Error(util.format('Unhandled message:', x)));
                     }
-                    if (callbackCount > 0)
-                        channel.ack(x);
+                    catch (error) {
+                        debug('consume', 'Unexpected error from subscriber; error = ', error, '.');
+                        me.emit('error', error);
+                    }
                 }
                 catch (error) {
-                    debug('consume', 'Unexpected error from subscriber; error = ', error, '.');
+                    debug('consume', 'Unexpected error handling message:\n error:', error, '\n message:', x);
                     me.emit('error', error);
                 }
             })
@@ -417,16 +425,15 @@ function AmqpTransport(options)
             me.emit('close');
         }
 
+        var matchesRegex = new RegExp(
+            '^' + me.ep.routingKey
+            .split('.').join('\\.')
+            .split('*').join('[^\\.]+')
+            .split('\\.#').join('(\\.[^\\.]+)*')
+            .split('#\\.').join('([^\\.]+\\.)*')
+            + '$');
         function matches(messageContext) {
-            var regex = me._matchesRegex || (me._matchesRegex =
-                new RegExp(
-                    '^' + me.ep.routingKey
-                    .replace('.', '\\.')
-                    .replace('*', '[^\\.]+')
-                    .replace('\\.#', '(\\.[^\\.]+)*')
-                    .replace('#\\.', '([^\\.]+\\.)*')
-                    + '$'));
-            return regex.test(messageContext.routingKey);
+            return matchesRegex.test(messageContext.routingKey);
         }
     }
 }
