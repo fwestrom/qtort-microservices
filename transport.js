@@ -1,7 +1,6 @@
 "use strict";
 
 var events = require('events');
-var rx = require('rx');
 var util = require('util');
 var uuid = require('node-uuid');
 var messageContext = require('./messageContext.js');
@@ -22,7 +21,7 @@ var messageContext = require('./messageContext.js');
  */
 function Transport(name, options)
 {
-    options = options || { debug: false };
+    options = util._extend({ debug: false }, options);
     options.name = name = name || options.name || 'Unnamed-Transport';
     Object.defineProperty(this, 'name', { value: options.name, writable: false });
     Object.defineProperty(this, 'instanceId', { value: uuid.v4(), writable: false });
@@ -45,7 +44,8 @@ function Transport(name, options)
      * Binds a reply endpoint for use with the specified action.
      *
      * @param actionToBind An action to be invoked with the reply context.
-     * @return rx.Observable<T> observable stream of messages received at the endpoint.
+     * @return A promise for the reply context that can be used to send
+     * messages to which a reply is expected.
      * @api public
      */
     this.bindReply = function(actionToBind) {

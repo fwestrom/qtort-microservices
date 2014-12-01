@@ -1,6 +1,5 @@
 "use strict";
 
-var rx = require('rx');
 var should = require('should');
 var sinon = require('sinon');
 var when = require('when');
@@ -22,8 +21,8 @@ describe('module', function() {
     beforeEach(function() {
         action = sinon.mock();
         messageContext = { properties: { replyTo: undefined }, reply: undefined, routingKey: 'a.b.c.d', custom1: 123 };
-        microservices = require('../');
-        observable = new rx.Subject();
+        observable = {};
+        microservices = require('../')({});
         transportObj = new (require('../transport.js'))('Test-Transport', { debug: true });
         transport = sinon.mock(transportObj);
         value1 = { a: Math.random() };
@@ -39,12 +38,19 @@ describe('module', function() {
                 toVerify.verify();
             });
         };
+
+        return when(transportDisposable);
     });
 
     afterEach(function() {
         if (transportDisposable) {
-            transportDisposable.dispose();
-            transportDisposable = undefined;
+            return when(transportDisposable)
+                .tap(function(disposable) {
+                    disposable.dispose();
+                })
+                .finally(function() {
+                    transportDisposable = undefined;
+                });
         }
     });
 
@@ -62,24 +68,6 @@ describe('module', function() {
             expectBind = transport
                 .expects('bind')
                 .returns(when.resolve(observable));
-        });
-
-        describe('with address', function() {
-            beforeEach(function() {
-                act = function() {
-                    return microservices.bind(address)
-                        .then(function(result) {
-                            result.subscribe(action);
-                        });
-                };
-            });
-
-            describeOnMessageContextFromTransport(function() { return expectBind; });
-
-            it('invokes transport.bind(address)', function() {
-                expectBind.withArgs(address);
-                actThenVerify(expectBind);
-            });
         });
 
         describe('with address, action', function() {
@@ -109,23 +97,6 @@ describe('module', function() {
             expectBindReply = transport
                 .expects('bindReply')
                 .returns(when.resolve(replyContext));
-        });
-
-        describe('without arguments', function() {
-            beforeEach(function() {
-                act = function() {
-                    return microservices.bindReply()
-                        .then(function(replyContext) {
-                            replyContext.subscribe(action);
-                        });
-                };
-            });
-
-            describeOnMessageContextFromTransport(function() { return expectBindReply; });
-
-            it('invokes transport', function() {
-                return actThenVerify(expectBindReply);
-            });
         });
 
         describe('with replyAction', function() {

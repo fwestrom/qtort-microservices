@@ -8,7 +8,6 @@
     "amqplib": "^0.2.0",
     "minimist": "^1.1.0",
     "node-uuid": "^1.4.1",
-    "rx": "^2.3.1",
     "when": "^3.4.4"
   },
   "devDependencies": {

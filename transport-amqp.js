@@ -49,6 +49,12 @@ function AmqpTransport(options)
     this.bindReply = bindReply;
 
     /**
+     * Calls a remote RPC-style endpoint and returns a promise for the reply
+     * message, error, or timeout.
+     */
+    this.call = call;
+
+    /**
      * Sends a message to the specified endpoint.
      *
      * @param {string} address The address of the destination endpoint.
@@ -56,7 +62,7 @@ function AmqpTransport(options)
      * @param {Object} properties Additional message properties.
      * @api public
      */
-    this.send = send;
+    this.send = send.bind(this);
 
     /**
      * Starts the transport.
@@ -162,7 +168,7 @@ function AmqpTransport(options)
     }
 
     function bindReply(callback) {
-        var replyQueue = 'medseek-util-microservices.' + instanceId;
+        var replyQueue = (options.defaultQueue || 'medseek-util-microservices') + '.' + instanceId;
         var addressPrefix = options.defaultExchange + '/' + replyQueue;
         return when.resolve(replyDescriptor)
             .then(function(descriptor) {
@@ -184,6 +190,31 @@ function AmqpTransport(options)
 
                 debug('bindReply', 'Binding a default endpoint; address = ', address);
                 return descriptor;
+            });
+    }
+
+    function call(address, body, properties, opts) {
+        opts = util._extend({
+            onGotReplyContext: undefined,
+            timeout: options.defaultTimeout
+        }, opts);
+
+        var replyDeferred = when.defer();
+        return bindReply(replyDeferred.resolve)
+            .then(function(rc) {
+                if (opts.onGotReplyContext) {
+                    rc = opts.onGotReplyContext(rc) || rc;
+                }
+                console.debug('call.send| address: %s, body:', address, body, 'properties:', properties);
+                var result = when.try(rc.send, address, body, properties)
+                    .catch(replyDeferred.reject)
+                    .yield(replyDeferred.promise);
+                if (opts.timeout) {
+                    var error = new Error('Response timeout after ' + opts.timeout);
+                    result = result.timeout(opts.timeout, error);
+                }
+                return result
+                    .finally(rc.close);
             });
     }
 
@@ -374,33 +405,39 @@ function AmqpTransport(options)
 
         debug('start', 'Broker: ', brokerAddress);
         return amqplib.connect(brokerAddress)
-            .then(function (newConnection) {
+            .then(function(newConnection) {
                 connection = newConnection;
-                return connection.createChannel()
-                    .then(function (createdChannel) {
-                        channel = createdChannel;
-                        return channel.prefetch(1);
-                    })
-                    .then(function () {
-                        debug('start', 'Ready');
-                        isReady = true;
-                        me.emit('ready');
-                    });
+                return connection.createChannel();
             })
-            .catch(function (error) {
+            .then(function(createdChannel) {
+                channel = createdChannel;
+                return channel.prefetch(1);
+            })
+            .then(function() {
+                debug('start', 'Ready');
+                isReady = true;
+                me.emit('ready');
+            })
+            .catch(function(error) {
                 debug('start', 'Error = ', error);
                 me.emit('error', error);
+                throw error;
             });
     }
 
     function stop() {
-        setImmediate(function() {
-            isReady = false;
-            if (connection) {
-                connection.close();
-                connection = undefined;
-                channel = undefined;
-            }
+        return when.promise(function(resolve, reject) {
+            setImmediate(function() {
+                isReady = false;
+                var toClose = connection;
+                if (toClose) {
+                    when.try(function() {
+                        connection = undefined;
+                        channel = undefined;
+                        return toClose.close();
+                    }).done(resolve, reject);
+                }
+            });
         });
     }
 

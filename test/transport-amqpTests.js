@@ -1,6 +1,5 @@
 "use strict";
 
-var rx = require('rx');
 var sinon = require('sinon');
 var uuid = require('node-uuid');
 var when = require('when');
