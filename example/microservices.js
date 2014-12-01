@@ -1,13 +1,18 @@
-var microservices = require('../');
 var minimist = require('minimist');
-
-module.exports = microservices;
 
 var options = minimist(process.argv.slice(2), {
     default: {
         defaultExchange: 'topic://example',
+        //defaultQueue: 'ping.example.[sender|listener]',  <-- no sharing here
+        defaultTimeout: 15000,
         debug: false
     }
 });
 
-microservices.useTransport(microservices.AmqpTransport, options);
+var microservices = require('../')(options);
+module.exports = microservices;
+module.exports.ready = microservices.useTransport(microservices.AmqpTransport, options)
+    .then(function() {
+        console.log('Ready.');
+        return microservices;
+    });

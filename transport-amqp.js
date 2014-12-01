@@ -205,7 +205,6 @@ function AmqpTransport(options)
                 if (opts.onGotReplyContext) {
                     rc = opts.onGotReplyContext(rc) || rc;
                 }
-                console.debug('call.send| address: %s, body:', address, body, 'properties:', properties);
                 var result = when.try(rc.send, address, body, properties)
                     .catch(replyDeferred.reject)
                     .yield(replyDeferred.promise);

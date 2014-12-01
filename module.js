@@ -167,7 +167,6 @@ module.exports = function microservices(options, serializer) {
             }, opts);
             return ms.transport.call.apply(ms.transport, arguments)
                 .then(function(mc) {
-                    console.debug('call.recv| mc:', mc);
                     updateMessageContext(mc);
                     return opts.bodyOnly ? mc.deserialize() : mc;
                 });
@@ -189,7 +188,7 @@ module.exports = function microservices(options, serializer) {
     function debug(/*label, arg1, ...*/) {
         if (options.debug) {
             arguments[0] = '[medseek-util-microservices.' + arguments[0] + ']';
-            console.debug.apply(util, arguments);
+            //console.log.apply(util, arguments);
         }
     }
 
