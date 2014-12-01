@@ -49,6 +49,12 @@ function AmqpTransport(options)
     this.bindReply = bindReply;
 
     /**
+     * Calls a remote RPC-style endpoint and returns a promise for the reply
+     * message, error, or timeout.
+     */
+    this.call = call;
+
+    /**
      * Sends a message to the specified endpoint.
      *
      * @param {string} address The address of the destination endpoint.
@@ -56,7 +62,7 @@ function AmqpTransport(options)
      * @param {Object} properties Additional message properties.
      * @api public
      */
-    this.send = send;
+    this.send = send.bind(this);
 
     /**
      * Starts the transport.
@@ -77,8 +83,9 @@ function AmqpTransport(options)
 
     this.parseAddress = options.parseAddress || parseAddress;
 
+    this.Descriptor = Descriptor;
+
     var amqplib = options && options.amqplib ? options.amqplib : require('amqplib');
-    var defaultExchange = options.defaultExchange;
 
     var channel = undefined;
     var connection = undefined;
@@ -161,8 +168,8 @@ function AmqpTransport(options)
     }
 
     function bindReply(callback) {
-        var replyQueue = 'medseek-util-microservices.' + instanceId;
-        var addressPrefix = defaultExchange + '/' + replyQueue;
+        var replyQueue = (options.defaultQueue || 'medseek-util-microservices') + '.' + instanceId;
+        var addressPrefix = options.defaultExchange + '/' + replyQueue;
         return when.resolve(replyDescriptor)
             .then(function(descriptor) {
                 if (descriptor)
@@ -186,6 +193,30 @@ function AmqpTransport(options)
             });
     }
 
+    function call(address, body, properties, opts) {
+        opts = util._extend({
+            onGotReplyContext: undefined,
+            timeout: options.defaultTimeout
+        }, opts);
+
+        var replyDeferred = when.defer();
+        return bindReply(replyDeferred.resolve)
+            .then(function(rc) {
+                if (opts.onGotReplyContext) {
+                    rc = opts.onGotReplyContext(rc) || rc;
+                }
+                var result = when.try(rc.send, address, body, properties)
+                    .catch(replyDeferred.reject)
+                    .yield(replyDeferred.promise);
+                if (opts.timeout) {
+                    var error = new Error('Response timeout after ' + opts.timeout);
+                    result = result.timeout(opts.timeout, error);
+                }
+                return result
+                    .finally(rc.close);
+            });
+    }
+
     function consume(descriptor) {
         var consumeQueue = descriptor.ep.queue;
         if (descriptor.isReply && replyDescriptor)
@@ -194,39 +225,47 @@ function AmqpTransport(options)
         debug('consume', 'Consuming from queue; queue: ', consumeQueue);
         return channel
             .consume(consumeQueue, function(x) {
-                var fields = x.fields || {};
-                var properties = x.properties || {};
-                var mc = new messageContext.MessageContext({
-                    body: x.content,
-                    contentType: properties.contentType,
-                    replyTo: properties.replyTo,
-                    routingKey: fields.routingKey,
-                    reply: properties.replyTo ? function(body, replyProperties) {
-                        replyProperties = replyProperties || {};
-                        replyProperties.contentType = properties.contentType;
-                        debug('consume.reply.send', 'body = {0}, properties = {1}', body, replyProperties);
-                        send(properties.replyTo, body, replyProperties);
-                    } : undefined
-                });
-                for (var key in properties.headers)
-                    if (properties.headers.hasOwnProperty(key))
-                        mc.properties[key] = properties.headers[key];
                 try {
-                    var callbackCount = 0;
-                    for (var i = 0; i < descriptors.length; i++) {
-                        var d = descriptors[i];
-                        if (d.callback && d.ep.queue == consumeQueue && me.isMatch(d, mc)) {
-                            if (d.isReply)
-                                mc.replyContext = d;
-                            d.callback(mc, d);
-                            ++callbackCount;
+                    var fields = x.fields || {};
+                    var properties = x.properties || {};
+                    var mc = new messageContext.MessageContext({
+                        body: x.content,
+                        contentType: properties.contentType,
+                        replyTo: properties.replyTo,
+                        routingKey: fields.routingKey,
+                        reply: properties.replyTo ? function(body, replyProperties) {
+                            replyProperties = replyProperties || {};
+                            replyProperties.contentType = properties.contentType;
+                            debug('consume.reply.send', 'body = {0}, properties = {1}', body, replyProperties);
+                            send(properties.replyTo, body, replyProperties);
+                        } : undefined
+                    });
+                    for (var key in properties.headers)
+                        if (properties.headers.hasOwnProperty(key))
+                            mc.properties[key] = properties.headers[key];
+                    try {
+                        var callbackCount = 0;
+                        for (var i = 0; i < descriptors.length; i++) {
+                            var d = descriptors[i];
+                            if (d.callback && d.ep.queue == consumeQueue && me.isMatch(d, mc)) {
+                                if (d.isReply)
+                                    mc.replyContext = d;
+                                d.callback(mc, d);
+                                ++callbackCount;
+                            }
                         }
+                        if (callbackCount > 0)
+                            channel.ack(x);
+                        else
+                            me.emit('error', new Error(util.format('Unhandled message:', x)));
                     }
-                    if (callbackCount > 0)
-                        channel.ack(x);
+                    catch (error) {
+                        debug('consume', 'Unexpected error from subscriber; error = ', error, '.');
+                        me.emit('error', error);
+                    }
                 }
                 catch (error) {
-                    debug('consume', 'Unexpected error from subscriber; error = ', error, '.');
+                    debug('consume', 'Unexpected error handling message:\n error:', error, '\n message:', x);
                     me.emit('error', error);
                 }
             })
@@ -298,13 +337,7 @@ function AmqpTransport(options)
     }
 
     function isMatch(descriptor, messageContext) {
-        var regex = new RegExp(
-                '^' + descriptor.ep.routingKey
-                .replace('.', '\\.')
-                .replace('*', '[^\\.]*')
-                .replace('#', '.*')
-                + '$');
-        return regex.test(messageContext.routingKey);
+        return descriptor.matches(messageContext);
     }
 
     function parseAddress(value) {
@@ -356,10 +389,10 @@ function AmqpTransport(options)
     }
 
     function start() {
-        var brokerAddress = 'amqp://localhost';
+        var brokerAddress = options.broker !== undefined ? options.broker : 'amqp://localhost';
         for (var i = 2; i < process.argv.length; i++) {
             var arg = process.argv[i];
-            var index = arg.search(/^[-/]broker([=:].+)?$/i);
+            var index = arg.search(/^([-/]|--)broker([=:].+)?$/i);
             if (index == 0) {
                 index = arg.search(/[=:]/);
                 if (index >= 0 || i < process.argv.length - 1) {
@@ -371,33 +404,39 @@ function AmqpTransport(options)
 
         debug('start', 'Broker: ', brokerAddress);
         return amqplib.connect(brokerAddress)
-            .then(function (newConnection) {
+            .then(function(newConnection) {
                 connection = newConnection;
-                return connection.createChannel()
-                    .then(function (createdChannel) {
-                        channel = createdChannel;
-                        return channel.prefetch(1);
-                    })
-                    .then(function () {
-                        debug('start', 'Ready');
-                        isReady = true;
-                        me.emit('ready');
-                    });
+                return connection.createChannel();
             })
-            .catch(function (error) {
+            .then(function(createdChannel) {
+                channel = createdChannel;
+                return channel.prefetch(1);
+            })
+            .then(function() {
+                debug('start', 'Ready');
+                isReady = true;
+                me.emit('ready');
+            })
+            .catch(function(error) {
                 debug('start', 'Error = ', error);
                 me.emit('error', error);
+                throw error;
             });
     }
 
     function stop() {
-        setImmediate(function() {
-            isReady = false;
-            if (connection) {
-                connection.close();
-                connection = undefined;
-                channel = undefined;
-            }
+        return when.promise(function(resolve, reject) {
+            setImmediate(function() {
+                isReady = false;
+                var toClose = connection;
+                if (toClose) {
+                    when.try(function() {
+                        connection = undefined;
+                        channel = undefined;
+                        return toClose.close();
+                    }).done(resolve, reject);
+                }
+            });
         });
     }
 
@@ -410,6 +449,7 @@ function AmqpTransport(options)
         this.isReply = isReply === true;
         this.ready = ready;
         this.close = close;
+        this.matches = matches;
 
         var me = this;
         function ready() {
@@ -419,6 +459,17 @@ function AmqpTransport(options)
         function close() {
             debug('Descriptor.close', 'Closing descriptor; ep:', me.ep);
             me.emit('close');
+        }
+
+        var matchesRegex = new RegExp(
+            '^' + me.ep.routingKey
+            .split('.').join('\\.')
+            .split('*').join('[^\\.]+')
+            .split('\\.#').join('(\\.[^\\.]+)*')
+            .split('#\\.').join('([^\\.]+\\.)*')
+            + '$');
+        function matches(messageContext) {
+            return matchesRegex.test(messageContext.routingKey);
         }
     }
 }

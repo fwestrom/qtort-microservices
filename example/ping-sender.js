@@ -1,30 +1,21 @@
 "use strict";
 
-var microservices = require('../'), util = require('util');
-if (!microservices.transport) {
-    microservices.useTransport(microservices.AmqpTransport, {
-        defaultExchange: 'topic://example',
-        debug: false
-    });
-}
+var microservices = require('./microservices.js');
+var util = require('util');
 
+var i = 0;
 function ping() {
-    microservices
-        .bindReply(function(messageContext, replyContext) {
-            var body = messageContext.deserialize();
+    var body = 'PING-' + ++i;
+    microservices.call('topic://example/ping.v1', body, { 'custom-1': 'value-1' })
+        .then(function(body) {
             //console.log('[Example.ping-sender] Received reply: ' + body);
             spin();
-            replyContext.close();
             setNextPing();
         })
-        .then(function(replyContext) {
-            var body = 'PING-' + ++i;
-            //console.log('[Example.ping-sender] Sending message: ' + body);
-            replyContext.send('topic://example/ping.v1', body, { 'custom-1': 'value-1' });
-        });
+        .done();
 }
 
-var i = 0, timer = -1, interval = 1;
+var timer = -1, interval = 1;
 function setNextPing() { timer = setImmediate(function() { timer = -1; ping(); }, interval); }
 process.once('SIGINT', function() { if (timer != -1) clearTimeout(timer); });
 setNextPing();
