@@ -1,6 +1,6 @@
 {
   "name": "medseek-util-microservices",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "main": "./module.js",
   "description": "A simple micro-services framework for Node.js.",
   "repository": "https://github.com/medseek-engineering/medseek-util-microservices.git",
