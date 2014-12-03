@@ -1,5 +1,6 @@
 "use strict";
 
+var _ = require('lodash');
 var events = require('events');
 var messageContext = require('./messageContext.js');
 var minimist = require('minimist');
@@ -13,7 +14,7 @@ var when = require('when');
  */
 module.exports = function microservices(options, serializer) {
     options.debug = options.debug && options.debug.toString().toLowerCase() === 'true';
-
+    options.defaultReturnBody = ('' + options.defaultReturnBody).toString().toLowerCase() === 'true';
     var ms = util._extend(new events.EventEmitter(), {
         /**
          * Provides access to options that can be used to configure the micro-services
@@ -125,10 +126,10 @@ module.exports = function microservices(options, serializer) {
          * @return An observable stream of messages received at the endpoint.
          * @api public
          */
-        bind: function(address, action) {
+        bind: function(address, action, opts) {
             debug('bind', 'Trying transport:', ms.transport.name);
-            var callback = getBindCallback(action, 'bind.callback');
-            return when.try(ms.transport.bind, address, callback)
+            var callback = getBindCallback(action, opts, 'bind.callback');
+            return ms.transport.bind(address, callback, opts)
                 .then(function(descriptor) {
                     if (!descriptor) {
                         throw new Error('No transport could bind the endpoint ' + address + '.');
@@ -146,8 +147,8 @@ module.exports = function microservices(options, serializer) {
          * @return An observable stream of messages received at the endpoint.
          * @api public
          */
-        bindReply: function(replyAction) {
-            var callback = getBindCallback(replyAction, 'bindReply.callback');
+        bindReply: function(replyAction, opts) {
+            var callback = getBindCallback(replyAction, opts, 'bindReply.callback');
             return ms.transport.bindReply(callback)
                 .then(function(replyContext) {
                     if (!replyContext) {
@@ -162,13 +163,12 @@ module.exports = function microservices(options, serializer) {
          * message, error, or timeout.
          */
         call: function(address, body, properties, opts) {
-            opts = util._extend({
-                bodyOnly: true
-            }, opts);
-            return ms.transport.call.apply(ms.transport, arguments)
+            opts = opts || {};
+            opts.returnBody = opts.returnBody || options.defaultReturnBody;
+            return ms.transport.call(address, body, properties, opts)
                 .then(function(mc) {
                     updateMessageContext(mc);
-                    return opts.bodyOnly ? mc.deserialize() : mc;
+                    return opts.returnBody ? mc.deserialize() : mc;
                 });
         },
 
@@ -181,14 +181,14 @@ module.exports = function microservices(options, serializer) {
          * @api public
          */
         send: function(address, body, properties) {
-            return ms.transport.send.apply(ms.transport, arguments);
+            return ms.transport.send(address, body, properties);
         }
     });
 
     function debug(/*label, arg1, ...*/) {
         if (options.debug) {
             arguments[0] = '[medseek-util-microservices.' + arguments[0] + ']';
-            //console.log.apply(util, arguments);
+            console.log.apply(util, arguments);
         }
     }
 
@@ -196,32 +196,28 @@ module.exports = function microservices(options, serializer) {
         x.deserialize = ms.serializer.deserialize.bind(ms.serializer, (x.properties || {}).contentType, x.body);
     }
 
-    function getBindCallback(action, label) {
+    function getBindCallback(action, opts, label) {
+        opts = opts || {};
+        opts.returnBody = opts.returnBody || options.defaultReturnBody;
         return function(mc, rc) {
-            debug(label, 'Received:', mc);
-            var state = {};
-            updateMessageContext(mc);
-            mc.reply = wrapReply(mc.reply);
-            return when.try(action, mc, rc)
-                .then(function(result) {
-                    if (mc.reply && !state.replied && result) {
-                        mc.reply(result);
-                    }
-                    else if (result) {
-                        throw util._extend(new Error('Cannot send reply.'), {
-                            result: result,
-                            messageContext: mc
-                        });
-                    }
-                });
-
-            function wrapReply(reply) {
-                return reply ? function(body, properties) {
-                    debug(label + '.reply', 'Sending reply; body:', body, 'properties:', properties);
-                    state.replied = true;
-                    return reply(body, properties);
-                } : undefined;
-            }
+            return when.try(function(state) {
+                debug(label, 'Received:', mc);
+                updateMessageContext(mc);
+                return opts.returnBody
+                    ? action(mc.deserialize(), mc, rc)
+                    : action(mc, rc);
+            })
+            .then(function(result) {
+                if (result !== undefined && mc.reply) {
+                    return mc.reply(result);
+                }
+                else if (result !== undefined) {
+                    throw _.extend(new Error('Cannot send reply.'), {
+                        messageContext: mc,
+                        result: result
+                    });
+                }
+            });
         };
     }
 };

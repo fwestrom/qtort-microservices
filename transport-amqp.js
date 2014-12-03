@@ -1,5 +1,6 @@
 "use strict";
 
+var _ = require('lodash');
 var events = require('events');
 var util = require('util');
 var uuid = require('node-uuid');
@@ -149,7 +150,8 @@ function AmqpTransport(options)
             .then(declareQueue)
             .then(bindQueue)
             .then(consume)
-            .tap(descriptor.ready);
+            .tap(descriptor.ready)
+            .yield(descriptor);
     }
 
     function bindQueue(descriptor) {
@@ -223,56 +225,13 @@ function AmqpTransport(options)
             return when.resolve(descriptor);
 
         debug('consume', 'Consuming from queue; queue: ', consumeQueue);
-        return channel
-            .consume(consumeQueue, function(x) {
-                try {
-                    var fields = x.fields || {};
-                    var properties = x.properties || {};
-                    var mc = new messageContext.MessageContext({
-                        body: x.content,
-                        contentType: properties.contentType,
-                        replyTo: properties.replyTo,
-                        routingKey: fields.routingKey,
-                        reply: properties.replyTo ? function(body, replyProperties) {
-                            replyProperties = replyProperties || {};
-                            replyProperties.contentType = properties.contentType;
-                            debug('consume.reply.send', 'body = {0}, properties = {1}', body, replyProperties);
-                            send(properties.replyTo, body, replyProperties);
-                        } : undefined
-                    });
-                    for (var key in properties.headers)
-                        if (properties.headers.hasOwnProperty(key))
-                            mc.properties[key] = properties.headers[key];
-                    try {
-                        var callbackCount = 0;
-                        for (var i = 0; i < descriptors.length; i++) {
-                            var d = descriptors[i];
-                            if (d.callback && d.ep.queue == consumeQueue && me.isMatch(d, mc)) {
-                                if (d.isReply)
-                                    mc.replyContext = d;
-                                d.callback(mc, d);
-                                ++callbackCount;
-                            }
-                        }
-                        if (callbackCount > 0)
-                            channel.ack(x);
-                        else
-                            me.emit('error', new Error(util.format('Unhandled message:', x)));
-                    }
-                    catch (error) {
-                        debug('consume', 'Unexpected error from subscriber; error = ', error, '.');
-                        me.emit('error', error);
-                    }
-                }
-                catch (error) {
-                    debug('consume', 'Unexpected error handling message:\n error:', error, '\n message:', x);
-                    me.emit('error', error);
-                }
-            })
+        return channel.consume(consumeQueue, getReceiveFn(consumeQueue))
             .then(function(consumeOk) {
                 var consumerTag = consumeOk.consumerTag;
                 descriptor.on('close', function() {
-                    channel.cancel(consumerTag);
+                    when(channel.cancel(consumerTag))
+                        .catch(onError)
+                        .done();
                 });
             })
             .yield(descriptor);
@@ -336,8 +295,56 @@ function AmqpTransport(options)
             .yield(descriptor);
     }
 
+    function getReceiveFn(consumeQueue) {
+        return function receive(x) {
+            var mc = _.extend(_.omit(x.fields, _.isUndefined), {
+                properties: _(_.omit(x.properties, 'headers'))
+                    .defaults(x.properties ? x.properties.headers : {})
+                    .omit(_.isUndefined)
+                    .value(),
+                body: x.content
+            });
+            return when.map(
+                _.filter(descriptors, function(d) { return d.callback && d.matches(mc); }),
+                function(descriptor) {
+                    return when.try(function() {
+                        var dmc = _.extend(_.clone(mc), {
+                            reply: mc.properties.replyTo ? getReplyFn(mc) : undefined,
+                            replyContext: descriptor.isReply ? descriptor : undefined
+                        });
+                        descriptor.callback(dmc, descriptor);
+                    });
+                })
+                .then(function(results) {
+                    if (results.length > 0) {
+                        return channel.ack(x);
+                    }
+                    else {
+                        var error = _.extend(new Error(util.format('Unhandled message:', mc)), { mc: mc });
+                        onError(error, true);
+                    }
+                });
+        };
+    }
+
+    function getReplyFn(mc) {
+        return function reply(body, properties) {
+            properties = _.defaults(properties || {}, mc.properties);
+            var to = properties.replyTo;
+            debug('reply', 'to: {0}, body = {1}, properties = {2}', to, body, properties);
+            return send(to, body, properties);
+        };
+    }
+
     function isMatch(descriptor, messageContext) {
         return descriptor.matches(messageContext);
+    }
+
+    function onError(error, thenThrow) {
+        debug('Emitting error:', error);
+        me.emit('error', error);
+        if (thenThrow)
+            throw error;
     }
 
     function parseAddress(value) {
@@ -346,10 +353,13 @@ function AmqpTransport(options)
         if (!value)
             return undefined;
 
-        var result = { address: value };
         var index = value.indexOf('://');
-        if (index < 0)
-            return undefined;
+        if (index < 0) {
+            var a = options.defaultExchange + '/' + value + '/' + options.defaultQueue;
+            return parseAddress(a);
+        }
+
+        var result = { address: value };
         result.exchangeType = value.substr(0, index);
         if (!result.exchangeType || (result.exchangeType != 'topic' && result.exchangeType != 'direct' && result.exchangeType != 'fanout'))
             return undefined;
@@ -375,17 +385,16 @@ function AmqpTransport(options)
         var options = {
             contentType: properties.contentType || 'application/json',
             replyTo: properties.replyTo,
-            headers: {}
+            headers: _.omit(properties, ['contentType', 'replyTo'])
         };
-        for (var key in properties)
-            if (properties.hasOwnProperty(key) && !options.hasOwnProperty(key))
-                options.headers[key] = properties[key];
 
         debug('send.serialize', 'contentType = {0}, bodyObject = {1}', options.contentType, bodyObject);
         var body = serializer.serialize(options.contentType, bodyObject);
         debug('send', 'Sending; to = ' + address + ", body = " + bodyObject.toString() + ", options = " + JSON.stringify(options) + '.');
         var sendAddress = me.parseAddress(address);
-        return channel.publish(sendAddress.exchange, sendAddress.routingKey, body, options);
+        return when.try(function() {
+            return channel.publish(sendAddress.exchange, sendAddress.routingKey, body, options);
+        });
     }
 
     function start() {
@@ -419,8 +428,7 @@ function AmqpTransport(options)
             })
             .catch(function(error) {
                 debug('start', 'Error = ', error);
-                me.emit('error', error);
-                throw error;
+                onError(error, true);
             });
     }
 

@@ -1,5 +1,6 @@
 "use strict";
 
+var _ = require('lodash');
 var sinon = require('sinon');
 var uuid = require('node-uuid');
 var when = require('when');
@@ -15,6 +16,7 @@ describe('transport-amqp', function() {
     var connection, connectionObj;
     var expectConnect;
     var expectCreateChannel;
+    var options;
     var transport;
 
     beforeEach(function() {
@@ -36,11 +38,13 @@ describe('transport-amqp', function() {
         expectCreateChannel = connection
             .expects('createChannel')
             .returns(when.resolve(channelObj));
-        transport = new AmqpTransport({
+        options = {
             amqplib: amqplibObj,
-            defaultExchange: 'topic://test',
+            defaultExchange: 'topic://test-' + uuid.v4(),
+            defaultQueue: 'transport-amqp.test.' + uuid.v4(),
             debug: false
-        });
+        };
+        transport = new AmqpTransport(options);
         actThen = function(doAssert) {
             return act().finally(doAssert);
         };
@@ -103,11 +107,6 @@ describe('transport-amqp', function() {
             });
         });
     });
-
-    function toAddress(exchangeType, exchange, routingKey, queue) {
-        var value = exchangeType + '://' + exchange + '/' + routingKey;
-        return queue ? value  + '/' + queue : value;
-    }
 
     describe('bind', function() {
         describeWithExchangeType('topic');
@@ -177,20 +176,22 @@ describe('transport-amqp', function() {
                         act = function() {
                             return when.try(function() {
                                 var consumerCallback = expectConsume.getCall(0).args[1];
-                                consumerCallback(msg);
+                                return consumerCallback(msg);
                             });
                         };
                         return promise;
                     });
 
                     it('invokes callback with message context', function() {
-                        return actThenVerify(callback)
-                            .then(function() {
-                                var mc = callback.getCall(0).args[0];
-                                mc.should.have.property('body').eql(msg.content);
-                                mc.should.have.property('routingKey').eql(routingKey);
-                                mc.should.have.property('properties').with.property('contentType').eql(msg.properties.contentType);
-                            });
+                        return when.try(function() {
+                            return actThenVerify(callback);
+                        })
+                        .then(function() {
+                            var mc = callback.getCall(0).args[0];
+                            mc.should.have.property('body').eql(msg.content);
+                            mc.should.have.property('routingKey').eql(routingKey);
+                            mc.should.have.property('properties').with.property('contentType').eql(msg.properties.contentType);
+                        });
                     });
 
                     it('acknowledges message', function() {
@@ -201,20 +202,26 @@ describe('transport-amqp', function() {
                     it('does not acknowledge message if subscriber throws', function() {
                         var expectedError = new Error('Test-Error');
                         callback.throws(expectedError);
-                        transport.once('error', function(error) {
-                            if (error !== expectedError)
-                                throw error;
-                        });
                         expectAck.never();
-                        return actThenVerify(expectAck);
+                        return actThenVerify(expectAck)
+                            .then(function() {
+                                throw new Error('Error was not produced.')
+                            })
+                            .catch(function(error) {
+                                error.should.be.exactly(expectedError);
+                            });
                     });
 
                     it('raises error notification if subscriber throws', function() {
                         var expectedError = new Error('Test-Error');
                         callback.throws(expectedError);
-                        var errorListener = sinon.mock().withArgs(expectedError);
-                        transport.once('error', errorListener);
-                        return actThenVerify(errorListener);
+                        return act()
+                            .then(function() {
+                                throw new Error('Error was not produced.')
+                            })
+                            .catch(function(error) {
+                                error.should.be.exactly(expectedError);
+                            });
                     })
                 });
             });
@@ -298,6 +305,27 @@ describe('transport-amqp', function() {
     });
 
     describe('parseAddress', function() {
+
+        describe('with rk and defaults', function() {
+            var cases = [
+                'a',
+                'b.c',
+                'd.*.f',
+                'g.#.z',
+            ];
+            _.forEach(cases, function(rk) {
+                it(rk, function() {
+                    var result = transport.parseAddress(rk, true);
+                    result.should.have.properties({
+                        exchangeType: options.defaultExchange.split('://')[0],
+                        exchange: options.defaultExchange.split('://')[1],
+                        queue: options.defaultQueue,
+                        routingKey: rk
+                    });
+                });
+            });
+        });
+
         describe('with well-formed values', function() {
             var exchangeTypes = ['direct', 'fanout', 'topic'];
             var exchangeNames = ['exchange-name', 'exchange.name'];
@@ -360,4 +388,16 @@ describe('transport-amqp', function() {
             });
         });
     });
+
+    function toAddress(exchangeType, exchangeName, routingKey, queueName) {
+        var esi = exchangeType.indexOf('://');
+        if (esi >= 0) {
+            queueName = routingKey;
+            routingKey = exchangeName;
+            exchangeName = exchangeType.slice(esi + 3);
+            exchangeType = exchangeType.slice(0, esi);
+        }
+        var value = exchangeType + '://' + exchangeName + '/' + routingKey;
+        return queueName ? value  + '/' + queueName : value;
+    }
 });

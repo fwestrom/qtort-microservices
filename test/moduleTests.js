@@ -2,6 +2,7 @@
 
 var should = require('should');
 var sinon = require('sinon');
+var uuid = require('node-uuid');
 var when = require('when');
 
 describe('module', function() {
@@ -13,6 +14,7 @@ describe('module', function() {
     var messageContext;
     var microservices;
     var observable;
+    var options;
     var transport;
     var transportDisposable;
     var transportObj;
@@ -22,6 +24,11 @@ describe('module', function() {
         action = sinon.mock();
         messageContext = { properties: { replyTo: undefined }, reply: undefined, routingKey: 'a.b.c.d', custom1: 123 };
         observable = {};
+        options = {
+            defaultExchange: 'topic://test-' + uuid.v4(),
+            defaultQueue: 'transport-amqp.test.' + uuid.v4(),
+            debug: false
+        };
         microservices = require('../')({});
         transportObj = new (require('../transport.js'))('Test-Transport', { debug: true });
         transport = sinon.mock(transportObj);
@@ -30,7 +37,7 @@ describe('module', function() {
         expectStart = transport.expects('start');
         expectStop = transport.expects('stop');
 
-        transportDisposable = microservices.useTransport(transportObj);
+        transportDisposable = microservices.useTransport(transportObj, options);
 
         act = function() { return when.resolve(); };
         actThenVerify = function(toVerify) {
@@ -64,7 +71,7 @@ describe('module', function() {
         var address;
         var expectBind;
         beforeEach(function() {
-            address = 'topic://tests/abc.123.def.' + Math.random();
+            address = options.defaultExchange + '/abc.123.def.' + Math.random();
             expectBind = transport
                 .expects('bind')
                 .returns(when.resolve(observable));
