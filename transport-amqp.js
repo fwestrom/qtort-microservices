@@ -329,7 +329,7 @@ function AmqpTransport(options)
 
     function getReplyFn(mc) {
         return function reply(body, properties) {
-            properties = _.defaults(properties || {}, mc.properties);
+            properties = _.defaults(properties || {}, _.omit(mc.properties, 'replyTo'));
             var to = properties.replyTo;
             debug('reply', 'to: {0}, body = {1}, properties = {2}', to, body, properties);
             return send(to, body, properties);
