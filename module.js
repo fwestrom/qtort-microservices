@@ -1,20 +1,21 @@
 "use strict";
 
-var _ = require('lodash');
 var events = require('events');
-var messageContext = require('./messageContext.js');
-var minimist = require('minimist');
 var util = require('util');
-var when = require('when');
 
 /**
  * Provides functionality for creating and interacting with micro-services.
  *
  * @module medseek-util-microservices
  */
-module.exports = function microservices(options, serializer) {
+module.exports = function microservices(options, _, Promise, serializer) {
+    _ = _ || require('lodash');
+    Promise = Promise || require('bluebird');
+    serializer = serializer || require('./serializer');
+
     options.debug = options.debug && options.debug.toString().toLowerCase() === 'true';
     options.defaultReturnBody = ('' + options.defaultReturnBody).toString().toLowerCase() === 'true';
+
     var ms = util._extend(new events.EventEmitter(), {
         /**
          * Provides access to options that can be used to configure the micro-services
@@ -88,18 +89,17 @@ module.exports = function microservices(options, serializer) {
                 throw new Error('Use of multiple transports is not supported.');
             }
             if (value instanceof Function) {
-                options = util._extend({}, options)
-                value = new value(options);
+                return new value(options);
             }
 
-            debug('addTransport', 'Using transport: ' + value.name);
+            debug('useTransport', 'Using transport: ' + value.name);
             ms.transport = value;
-            ms.transport.serializer = ms.serializer;
 
-            return when.promise(function(resolve, reject) {
+            return new Promise(function(resolve, reject) {
                 setImmediate(function() {
-                    when.try(value.start)
-                        .done(resolve, reject);
+                    Promise.try(function() {
+                        value.start();
+                    }).done(resolve, reject);
                 });
             }).then(function() {
                 var disposed = false, disposable = {
@@ -200,24 +200,25 @@ module.exports = function microservices(options, serializer) {
         opts = opts || {};
         opts.returnBody = opts.returnBody || options.defaultReturnBody;
         return function(mc, rc) {
-            return when.try(function(state) {
-                debug(label, 'Received:', mc);
-                updateMessageContext(mc);
-                return opts.returnBody
-                    ? action(mc.deserialize(), mc, rc)
-                    : action(mc, rc);
-            })
-            .then(function(result) {
-                if (result !== undefined && mc.reply) {
-                    return mc.reply(result);
-                }
-                else if (result !== undefined) {
-                    throw _.extend(new Error('Cannot send reply.'), {
-                        messageContext: mc,
-                        result: result
-                    });
-                }
-            });
+            return Promise
+                .try(function(state) {
+                    debug(label, 'Received:', mc);
+                    updateMessageContext(mc);
+                    return opts.returnBody
+                        ? action(mc.deserialize(), mc, rc)
+                        : action(mc, rc);
+                })
+                .then(function(result) {
+                    if (result !== undefined && mc.reply) {
+                        return mc.reply(result);
+                    }
+                    else if (result !== undefined) {
+                        throw _.extend(new Error('Cannot send reply.'), {
+                            messageContext: mc,
+                            result: result
+                        });
+                    }
+                });
         };
     }
 };

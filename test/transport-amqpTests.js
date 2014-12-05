@@ -1,9 +1,9 @@
 "use strict";
 
 var _ = require('lodash');
+var Promise = require('bluebird')
 var sinon = require('sinon');
 var uuid = require('node-uuid');
-var when = require('when');
 
 var AmqpTransport = require('../transport-amqp.js');
 
@@ -34,17 +34,16 @@ describe('transport-amqp', function() {
         });
         expectConnect = amqplib
             .expects('connect')
-            .returns(when.resolve(connectionObj));
+            .returns(Promise.resolve(connectionObj));
         expectCreateChannel = connection
             .expects('createChannel')
-            .returns(when.resolve(channelObj));
+            .returns(Promise.resolve(channelObj));
         options = {
-            amqplib: amqplibObj,
             defaultExchange: 'topic://test-' + uuid.v4(),
             defaultQueue: 'transport-amqp.test.' + uuid.v4(),
             debug: false
         };
-        transport = new AmqpTransport(options);
+        transport = new AmqpTransport(options, undefined, amqplibObj);
         actThen = function(doAssert) {
             return act().finally(doAssert);
         };
@@ -54,9 +53,7 @@ describe('transport-amqp', function() {
     });
 
     afterEach(function() {
-        return when.promise(function(resolve) {
-            setTimeout(function() { resolve(); }, 1);
-        });
+        return Promise.resolve().delay(1);
     });
 
     describe('name', function() {
@@ -122,16 +119,16 @@ describe('transport-amqp', function() {
                     address = toAddress(exchangeType, exchange = 'exchange-' + Math.random(), (routingKey = 'routingKey-' + Math.random()), (queue = 'queue-' + Math.random()));
                     expectAssertExchange = channel
                         .expects('assertExchange')
-                        .returns(when.resolve());
+                        .returns(Promise.resolve());
                     expectAssertQueue = channel
                         .expects('assertQueue')
-                        .returns(when.resolve({ queue: queue }));
+                        .returns(Promise.resolve({ queue: queue }));
                     expectBindQueue = channel
                         .expects('bindQueue')
-                        .returns(when.resolve());
+                        .returns(Promise.resolve());
                     expectConsume = channel
                         .expects('consume')
-                        .returns(when.resolve({ consumerTag: 'ctag-' + Math.random() }));
+                        .returns(Promise.resolve({ consumerTag: 'ctag-' + Math.random() }));
                     act = function() {
                         return transport.bind(address, callback);
                     };
@@ -174,7 +171,7 @@ describe('transport-amqp', function() {
                         msg = { content: new Buffer(Math.random().toString()), properties: { contentType: 'application/json' }, fields: { routingKey: routingKey } };
                         var promise = act();
                         act = function() {
-                            return when.try(function() {
+                            return Promise.try(function() {
                                 var consumerCallback = expectConsume.getCall(0).args[1];
                                 return consumerCallback(msg);
                             });
@@ -183,7 +180,7 @@ describe('transport-amqp', function() {
                     });
 
                     it('invokes callback with message context', function() {
-                        return when.try(function() {
+                        return Promise.try(function() {
                             return actThenVerify(callback);
                         })
                         .then(function() {

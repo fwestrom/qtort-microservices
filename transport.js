@@ -3,7 +3,6 @@
 var events = require('events');
 var util = require('util');
 var uuid = require('node-uuid');
-var messageContext = require('./messageContext.js');
 
 /**
  * Provides a skeleton for transports used with the micro-services module.
@@ -24,7 +23,7 @@ function Transport(name, options)
     options = util._extend({ debug: false }, options);
     options.name = name = name || options.name || 'Unnamed-Transport';
     Object.defineProperty(this, 'name', { value: options.name, writable: false });
-    Object.defineProperty(this, 'instanceId', { value: uuid.v4(), writable: false });
+    Object.defineProperty(this, 'instanceId', { value: uuid.v1(), writable: false });
 
     var me = this;
 

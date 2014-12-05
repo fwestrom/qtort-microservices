@@ -1,19 +1,32 @@
 {
   "name": "medseek-util-microservices",
-  "version": "0.0.16",
+  "version": "0.1.0",
   "description": "A simple micro-services framework for Node.js.",
   "main": "./module.js",
   "repository": "https://github.com/medseek-engineering/medseek-util-microservices.git",
+  "authors": [
+    { "name": "Fred Westrom", "email": "npm@qtort.com" }
+  ],
   "dependencies": {
-    "amqplib": "^0.2.0",
-    "lodash": "^2.4.1",
-    "minimist": "^1.1.0",
-    "node-uuid": "^1.4.1",
-    "when": "^3.4.4"
+    "amqplib": "^0.3.0"
   },
   "devDependencies": {
+    "bluebird": "^2.3.11",
+    "lodash": "^2.4.1",
     "mocha": "^1.21.4",
+    "node-uuid": "^1.4.1",
     "should": "^4.0.4",
     "sinon": "^1.10.3"
-  }
+  },
+  "peerDependencies": {
+    "bluebird": "^2.3.11",
+    "lodash": "^2.4.1",
+    "node-uuid": "^1.4.1"
+  },
+  "keywords": [
+    "micro-services",
+    "microservices",
+    "amqp",
+    "rabbitmq"
+  ]
 }

@@ -1,13 +1,8 @@
 "use strict";
 
-var _ = require('lodash');
 var events = require('events');
 var util = require('util');
-var uuid = require('node-uuid');
-var messageContext = require('./messageContext.js');
-var serializer = require('./serializer.js');
 var Transport = require('./transport.js');
-var when = require('when');
 
 /**
  * Provides an AMQP transport for the micro-services module.
@@ -27,9 +22,19 @@ util.inherits(AmqpTransport, Transport);
  * @param options.defaultExchange The default exchange.
  * @param [options.amqplib] An optional amqplib to use instead of the default module.
  */
-function AmqpTransport(options)
+function AmqpTransport(options, _, amqplib, Promise, serializer, uuid)
 {
+    if (!(this instanceof AmqpTransport)) {
+        return new AmqpTransport(options, _, amqplib, Promise, serializer, uuid);
+    }
+
     Transport.call(this, 'AmqpTransport', options);
+
+    _ = _ || require('lodash');
+    amqplib = amqplib || require('amqplib');
+    Promise = Promise || require('bluebird');
+    serializer = serializer || require('./serializer');
+    uuid = uuid || require('node-uuid');
 
     /**
      * Binds an endpoint at the specified address.
@@ -86,12 +91,10 @@ function AmqpTransport(options)
 
     this.Descriptor = Descriptor;
 
-    var amqplib = options && options.amqplib ? options.amqplib : require('amqplib');
-
     var channel = undefined;
     var connection = undefined;
     var descriptors = [];
-    var instanceId = uuid.v4();
+    var instanceId = uuid.v1();
     var isReady = false;
     var me = this;
     var replyDescriptor;
@@ -133,49 +136,55 @@ function AmqpTransport(options)
     }
 
     function bindInternal(descriptor) {
-        var deferred = when.defer();
-        if (isReady) {
-            debug('bindInternal', 'isReady was already true.');
-            deferred.resolve();
-        }
-        else {
-            me.once('ready', function() {
+        return Promise
+            .try(function() {
+                return isReady || new Promise(function(resolve, reject) {
+                    me.once('ready', resolve);
+                });
+            })
+            .tap(function() {
                 debug('bindInternal', 'received ready notification.');
-                deferred.resolve();
-            });
-        }
-        return deferred.promise
-            .yield(descriptor)
+            })
+            .return(descriptor)
             .then(declareExchange)
             .then(declareQueue)
             .then(bindQueue)
             .then(consume)
             .tap(descriptor.ready)
-            .yield(descriptor);
+            .return(descriptor);
     }
 
     function bindQueue(descriptor) {
         if (descriptor.isReply && replyDescriptor)
-            return when.resolve(descriptor);
+            return Promise.resolve(descriptor);
         var bindInfo = { queue: descriptor.ep.queue, exchange: descriptor.ep.exchange, routingKey: descriptor.ep.routingKey };
         debug('bindQueue', 'Binding queue; bindInfo: ', bindInfo);
-        return channel.bindQueue(bindInfo.queue, bindInfo.exchange, bindInfo.routingKey)
+        return Promise
+            .try(function() {
+                return channel.bindQueue(bindInfo.queue, bindInfo.exchange, bindInfo.routingKey);
+            })
             .then(function() {
                 descriptor.on('close', function() {
-                    channel.unbindQueue(descriptor.ep.queue, descriptor.ep.exchange, descriptor.ep.routingKey);
+                    return Promise
+                        .try(function() {
+                            return channel.unbindQueue(descriptor.ep.queue, descriptor.ep.exchange, descriptor.ep.routingKey);
+                        })
+                        .catch(onError)
+                        .done();
                 });
                 return bindInfo;
             })
-            .yield(descriptor);
+            .return(descriptor);
     }
 
     function bindReply(callback) {
         var replyQueue = (options.defaultQueue || 'medseek-util-microservices') + '.' + instanceId;
         var addressPrefix = options.defaultExchange + '/' + replyQueue;
-        return when.resolve(replyDescriptor)
-            .then(function(descriptor) {
-                if (descriptor)
-                    return descriptor;
+        return Promise
+            .try(function() {
+                if (replyDescriptor) {
+                    return replyDescriptor;
+                }
                 debug('bindReply', 'Setting up default reply endpoint.');
                 var address = addressPrefix + '.#/' + replyQueue;
                 replyDescriptor = addDescriptor(address);
@@ -201,18 +210,26 @@ function AmqpTransport(options)
             timeout: options.defaultTimeout
         }, opts);
 
-        var replyDeferred = when.defer();
+        var replyDeferred = {};
+        replyDeferred.promise = new Promise(function(resolve, reject) {
+            replyDeferred.resolve = resolve;
+            replyDeferred.reject = reject;
+        });
         return bindReply(replyDeferred.resolve)
             .then(function(rc) {
                 if (opts.onGotReplyContext) {
                     rc = opts.onGotReplyContext(rc) || rc;
                 }
-                var result = when.try(rc.send, address, body, properties)
+                var result = Promise
+                    .try(function() {
+                        return rc.send(address, body, properties);
+                    })
                     .catch(replyDeferred.reject)
-                    .yield(replyDeferred.promise);
+                    .then(function() {
+                        return replyDeferred.promise;
+                    });
                 if (opts.timeout) {
-                    var error = new Error('Response timeout after ' + opts.timeout);
-                    result = result.timeout(opts.timeout, error);
+                    result = result.timeout(opts.timeout, 'Response timeout: ' + opts.timeout);
                 }
                 return result
                     .finally(rc.close);
@@ -222,19 +239,25 @@ function AmqpTransport(options)
     function consume(descriptor) {
         var consumeQueue = descriptor.ep.queue;
         if (descriptor.isReply && replyDescriptor)
-            return when.resolve(descriptor);
+            return Promise.resolve(descriptor);
 
         debug('consume', 'Consuming from queue; queue: ', consumeQueue);
-        return channel.consume(consumeQueue, getReceiveFn(consumeQueue))
+        return Promise
+            .try(function() {
+                return channel.consume(consumeQueue, getReceiveFn(consumeQueue));
+            })
             .then(function(consumeOk) {
                 var consumerTag = consumeOk.consumerTag;
                 descriptor.on('close', function() {
-                    when(channel.cancel(consumerTag))
+                    Promise
+                        .try(function() {
+                            return channel.cancel(consumerTag);
+                        })
                         .catch(onError)
                         .done();
                 });
             })
-            .yield(descriptor);
+            .return(descriptor);
     }
 
     function debug(label, message) {
@@ -264,25 +287,31 @@ function AmqpTransport(options)
         if (exchangeInfo) {
             if (descriptor.ep.exchangeType != exchangeInfo.type)
                 throw new Error('Exchange was previously declared as a different type; name = ' + exchangeInfo.name + ', originalType = ' + exchangeInfo.type + ', specifiedType = ' + type + '.');
-            return when.resolve(descriptor);
+            return Promise.resolve(descriptor);
         }
         exchangeInfo = { name: descriptor.ep.exchange, type: descriptor.ep.exchangeType, options: { durable: false } };
         debug('declareExchange', 'Declaring exchange ' + exchangeInfo.type + '://' + exchangeInfo.name + '; options = ' + util.inspect(exchangeInfo.options) + '.');
-        return channel.assertExchange(exchangeInfo.name, exchangeInfo.type, exchangeInfo.options)
+        return Promise
+            .try(function() {
+                return channel.assertExchange(exchangeInfo.name, exchangeInfo.type, exchangeInfo.options);
+            })
             .then(function() {
                 declaredExchanges.push(exchangeInfo);
                 return exchangeInfo;
             })
-            .yield(descriptor);
+            .return(descriptor);
     }
 
     function declareQueue(descriptor) {
         if (declaredQueues.findByName(descriptor.ep.queue))
-            return when.resolve(descriptor);
+            return Promise.resolve(descriptor);
 
         var queueInfo = { name: descriptor.ep.queue, options: { autoDelete: true, durable: false } };
         debug('declareQueue', 'Declaring queue; name = ' + queueInfo.name + '; options = ' + util.inspect(queueInfo.options) + '.');
-        return channel.assertQueue(queueInfo.name, queueInfo.options)
+        return Promise
+            .try(function() {
+                return channel.assertQueue(queueInfo.name, queueInfo.options);
+            })
             .then(function(declareOk) {
                 queueInfo.name = declareOk.queue;
                 declaredQueues.push(queueInfo);
@@ -292,38 +321,39 @@ function AmqpTransport(options)
                 if (descriptor.ep.queue == '')
                     descriptor.ep.queue = queueInfo.name;
             })
-            .yield(descriptor);
+            .return(descriptor);
     }
 
     function getReceiveFn(consumeQueue) {
         return function receive(x) {
-            var mc = _.extend(_.omit(x.fields, _.isUndefined), {
-                properties: _(_.omit(x.properties, 'headers'))
-                    .defaults(x.properties ? x.properties.headers : {})
-                    .omit(_.isUndefined)
-                    .value(),
-                body: x.content
-            });
-            return when.map(
-                _.filter(descriptors, function(d) { return d.callback && d.matches(mc); }),
-                function(descriptor) {
-                    return when.try(function() {
-                        var dmc = _.extend(_.clone(mc), {
-                            reply: mc.properties.replyTo ? getReplyFn(mc) : undefined,
-                            replyContext: descriptor.isReply ? descriptor : undefined
+            return Promise
+                .try(function() {
+                    var mc = _.extend(_.omit(x.fields, _.isUndefined), {
+                        properties: _(_.omit(x.properties, 'headers'))
+                        .defaults(x.properties ? x.properties.headers : {})
+                        .omit(_.isUndefined)
+                        .value(),
+                        body: x.content
+                    });
+                    var matches = _.filter(descriptors, function(d) { return d.callback && d.matches(mc); });
+                    if (matches.length < 1) {
+                        throw _.extend(new Error(util.format('Unhandled message:', mc)), { mc: mc });
+                    }
+                    return Promise.map(matches, function(descriptor) {
+                        return Promise.try(function() {
+                            var dmc = _.extend(_.clone(mc), {
+                                reply: mc.properties.replyTo ? getReplyFn(mc) : undefined,
+                                replyContext: descriptor.isReply ? descriptor : undefined
+                            });
+                            return descriptor.callback(dmc, descriptor);
                         });
-                        descriptor.callback(dmc, descriptor);
                     });
                 })
                 .then(function(results) {
-                    if (results.length > 0) {
-                        return channel.ack(x);
-                    }
-                    else {
-                        var error = _.extend(new Error(util.format('Unhandled message:', mc)), { mc: mc });
-                        onError(error, true);
-                    }
-                });
+                    return channel.ack(x);
+                })
+                .catch(onError)
+                .done();
         };
     }
 
@@ -340,11 +370,15 @@ function AmqpTransport(options)
         return descriptor.matches(messageContext);
     }
 
-    function onError(error, thenThrow) {
-        debug('Emitting error:', error);
-        me.emit('error', error);
-        if (thenThrow)
+    function onError(error) {
+        if (me.listeners('error').length > 0) {
+            debug('Emitting error:', error);
+            return me.emit('error', error);
+        }
+        else {
+            debug('Unhandled error:', error);
             throw error;
+        }
     }
 
     function parseAddress(value) {
@@ -392,7 +426,7 @@ function AmqpTransport(options)
         var body = serializer.serialize(options.contentType, bodyObject);
         debug('send', 'Sending; to = ' + address + ", body = " + bodyObject.toString() + ", options = " + JSON.stringify(options) + '.');
         var sendAddress = me.parseAddress(address);
-        return when.try(function() {
+        return Promise.try(function() {
             return channel.publish(sendAddress.exchange, sendAddress.routingKey, body, options);
         });
     }
@@ -412,7 +446,10 @@ function AmqpTransport(options)
         }
 
         debug('start', 'Broker: ', brokerAddress);
-        return amqplib.connect(brokerAddress)
+        return Promise
+            .try(function() {
+                return amqplib.connect(brokerAddress);
+            })
             .then(function(newConnection) {
                 connection = newConnection;
                 return connection.createChannel();
@@ -426,19 +463,16 @@ function AmqpTransport(options)
                 isReady = true;
                 me.emit('ready');
             })
-            .catch(function(error) {
-                debug('start', 'Error = ', error);
-                onError(error, true);
-            });
+            .catch(onError);
     }
 
     function stop() {
-        return when.promise(function(resolve, reject) {
+        return new Promise(function(resolve, reject) {
             setImmediate(function() {
                 isReady = false;
                 var toClose = connection;
                 if (toClose) {
-                    when.try(function() {
+                    Promise.try(function() {
                         connection = undefined;
                         channel = undefined;
                         return toClose.close();

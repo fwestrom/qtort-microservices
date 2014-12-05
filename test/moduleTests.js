@@ -1,9 +1,9 @@
 "use strict";
 
+var Promise = require('bluebird');
 var should = require('should');
 var sinon = require('sinon');
 var uuid = require('node-uuid');
-var when = require('when');
 
 describe('module', function() {
     var a = { 1: 1 }, b = { 2: 2 }, c = { 3: 3 }, d = { 4: 4 };
@@ -37,25 +37,26 @@ describe('module', function() {
         expectStart = transport.expects('start');
         expectStop = transport.expects('stop');
 
-        transportDisposable = microservices.useTransport(transportObj, options);
-
-        act = function() { return when.resolve(); };
+        act = function() { return Promise.resolve(); };
         actThenVerify = function(toVerify) {
             return act().then(function() {
                 toVerify.verify();
             });
         };
 
-        return when(transportDisposable);
+        return Promise.try(function() {
+            return microservices.useTransport(transportObj, options);
+        }).tap(function(disposable) {
+            transportDisposable = disposable;
+        });
     });
 
     afterEach(function() {
         if (transportDisposable) {
-            return when(transportDisposable)
-                .tap(function(disposable) {
+            return Promise.resolve(transportDisposable)
+                .then(function(disposable) {
                     disposable.dispose();
-                })
-                .finally(function() {
+                }).finally(function() {
                     transportDisposable = undefined;
                 });
         }
@@ -74,7 +75,7 @@ describe('module', function() {
             address = options.defaultExchange + '/abc.123.def.' + Math.random();
             expectBind = transport
                 .expects('bind')
-                .returns(when.resolve(observable));
+                .returns(Promise.resolve(observable));
         });
 
         describe('with address, action', function() {
@@ -103,7 +104,7 @@ describe('module', function() {
             replyContext.send = sinon.mock();
             expectBindReply = transport
                 .expects('bindReply')
-                .returns(when.resolve(replyContext));
+                .returns(Promise.resolve(replyContext));
         });
 
         describe('with replyAction', function() {
@@ -143,8 +144,8 @@ describe('module', function() {
                     var callback = bind.getCall(0).args[1];
                     if (!callback)
                         callback = bind.getCall(0).args[0];
-                    return when.try(function() {
-                        callback(messageContext, {});
+                    return Promise.try(function() {
+                        return callback(messageContext, {});
                     });
                 };
                 return promise;
@@ -174,7 +175,7 @@ describe('module', function() {
         beforeEach(function() {
             expectSend = transport
                 .expects('send')
-                .returns(when.resolve(expectSendResult));
+                .returns(Promise.resolve(expectSendResult));
             act = function() {
                 return microservices.send(a, b, c);
             };
@@ -197,7 +198,7 @@ describe('module', function() {
         beforeEach(function() {
             act = function() {
                 microservices.dispose();
-                return when.resolve();
+                return Promise.resolve();
             };
         });
 
