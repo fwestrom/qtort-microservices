@@ -456,7 +456,9 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid)
             })
             .then(function(createdChannel) {
                 channel = createdChannel;
-                return channel.prefetch(1);
+                if (options.channelPrefetch) {
+                    return channel.prefetch(options.channelPrefetch);
+                }
             })
             .then(function() {
                 debug('start', 'Ready');
