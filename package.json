@@ -1,6 +1,6 @@
 {
-  "name": "medseek-util-microservices",
-  "version": "0.1.1",
+  "name": "medseek-microservices",
+  "version": "0.1.2",
   "description": "A simple micro-services framework for Node.js.",
   "main": "./module.js",
   "repository": "https://github.com/medseek-engineering/medseek-util-microservices.git",
@@ -28,5 +28,8 @@
     "microservices",
     "amqp",
     "rabbitmq"
-  ]
+  ],
+  "scripts": {
+    "test": "node node_modules/mocha/bin/_mocha --reporter dot test --ll=WARN"
+  }
 }

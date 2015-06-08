@@ -7,7 +7,7 @@ var uuid = require('node-uuid');
 
 var AmqpTransport = require('../transport-amqp.js');
 
-describe('transport-amqp', function() {
+describe.only('transport-amqp', function() {
     var act, actThen, actThenVerify;
     var amqplib, amqplibObj;
     var brokerAddress = 'amqp://localhost';
