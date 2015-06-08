@@ -337,7 +337,7 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid)
                     });
                     var matches = _.filter(descriptors, function(d) { return d.callback && d.matches(mc); });
                     if (matches.length < 1) {
-                        return console.warn(new Error(util.format('Unhandled message:', mc)));
+                        throw _.extend(new Error(util.format('Unhandled message:', mc)), { mc: mc });
                     }
                     return Promise.map(matches, function(descriptor) {
                         return Promise.try(function() {
