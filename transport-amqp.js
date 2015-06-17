@@ -464,6 +464,10 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid)
                 debug('start', 'Ready');
                 isReady = true;
                 me.emit('ready');
+                connection.on('error', function(err){
+                    console.error(err);
+                    process.exit(1);
+                });
             })
             .catch(onError);
     }
