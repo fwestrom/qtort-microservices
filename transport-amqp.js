@@ -118,7 +118,7 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid)
         if (!ep)
             throw new Error('Unsupported address or endpoint ' + addressOrEp + '.');
 
-        var descriptor = new Descriptor(ep, callback, isReply);
+        var descriptor = _.bindAll(new Descriptor(ep, callback, isReply));
         descriptors.push(descriptor);
         descriptor.once('close', function() {
             var index = descriptors.indexOf(descriptor);
@@ -461,13 +461,17 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid)
                 }
             })
             .then(function() {
+                if (connection.on) {
+                    connection.on('error', function(error) {
+                        console.error(error);
+                        process.exit(1);
+                    });
+                }
+            })
+            .then(function() {
                 debug('start', 'Ready');
                 isReady = true;
                 me.emit('ready');
-                connection.on('error', function(err){
-                    console.error(err);
-                    process.exit(1);
-                });
             })
             .catch(onError);
     }
