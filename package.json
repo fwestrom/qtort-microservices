@@ -1,7 +1,7 @@
 {
     "name": "qtort-microservices",
-    "version": "1.0.1",
-    "description": "A simple micro-services framework for Node.js, and a continuation of my work from medseek-util-microservices (ih-util-microservices).",
+    "version": "1.0.2",
+    "description": "A simple micro-services framework for Node.js.",
     "main": "./module.js",
     "authors": [{
         "name": "Fred Westrom",
