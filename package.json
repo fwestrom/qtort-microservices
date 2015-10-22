@@ -1,6 +1,6 @@
 {
     "name": "qtort-microservices",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "description": "A simple micro-services framework for Node.js.",
     "main": "./module.js",
     "authors": [{
