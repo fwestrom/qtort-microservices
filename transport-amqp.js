@@ -410,7 +410,7 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid)
             return parseAddress(a);
         }
 
-        var u = url.parse(value), p = u.pathname.substr(1).split('/');
+        var u = url.parse(value), p = (u.pathname || '/').substr(1).split('/');
         u.query = u.query || {};
         var a = {
             address: value,
@@ -425,7 +425,6 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid)
             },
             routingKey: p.length > 0 ? p[0] : undefined,
         };
-        console.error(a);
 
         if (!a.exchange.type || (a.exchange.type != 'topic' && a.exchange.type != 'direct' && a.exchange.type != 'fanout'))
             return undefined;
