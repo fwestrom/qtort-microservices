@@ -1,6 +1,7 @@
 "use strict";
 
 var events = require('events');
+var url = require('url');
 var util = require('util');
 var Transport = require('./transport.js');
 
@@ -157,7 +158,11 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid)
     function bindQueue(descriptor) {
         if (descriptor.isReply && replyDescriptor)
             return Promise.resolve(descriptor);
-        var bindInfo = { queue: descriptor.ep.queue, exchange: descriptor.ep.exchange, routingKey: descriptor.ep.routingKey };
+        var bindInfo = {
+            queue: descriptor.ep.queue.name,
+            exchange: descriptor.ep.exchange.name,
+            routingKey: descriptor.ep.routingKey,
+        };
         debug('bindQueue', 'Binding queue; bindInfo: ', bindInfo);
         return Promise
             .try(function() {
@@ -167,7 +172,7 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid)
                 descriptor.on('close', function() {
                     return Promise
                         .try(function() {
-                            return channel.unbindQueue(descriptor.ep.queue, descriptor.ep.exchange, descriptor.ep.routingKey);
+                            return channel.unbindQueue(descriptor.ep.queue.name, descriptor.ep.exchange.name, descriptor.ep.routingKey);
                         })
                         .catch(onError)
                         .done();
@@ -237,7 +242,7 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid)
     }
 
     function consume(descriptor) {
-        var consumeQueue = descriptor.ep.queue;
+        var consumeQueue = descriptor.ep.queue.name;
         if (descriptor.isReply && replyDescriptor)
             return Promise.resolve(descriptor);
 
@@ -283,13 +288,19 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid)
     }
 
     function declareExchange(descriptor) {
-        var exchangeInfo = declaredExchanges.findByName(descriptor.ep.exchange);
+        var exchangeInfo = declaredExchanges.findByName(descriptor.ep.exchange.name);
         if (exchangeInfo) {
-            if (descriptor.ep.exchangeType != exchangeInfo.type)
+            if (descriptor.ep.exchange.type != exchangeInfo.type)
                 throw new Error('Exchange was previously declared as a different type; name = ' + exchangeInfo.name + ', originalType = ' + exchangeInfo.type + ', specifiedType = ' + type + '.');
             return Promise.resolve(descriptor);
         }
-        exchangeInfo = { name: descriptor.ep.exchange, type: descriptor.ep.exchangeType, options: { durable: false } };
+        exchangeInfo = {
+            name: descriptor.ep.exchange.name,
+            type: descriptor.ep.exchange.type,
+            options: {
+                durable: descriptor.ep.exchange.durable,
+            },
+        };
         debug('declareExchange', 'Declaring exchange ' + exchangeInfo.type + '://' + exchangeInfo.name + '; options = ' + util.inspect(exchangeInfo.options) + '.');
         return Promise
             .try(function() {
@@ -303,10 +314,16 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid)
     }
 
     function declareQueue(descriptor) {
-        if (declaredQueues.findByName(descriptor.ep.queue))
+        if (declaredQueues.findByName(descriptor.ep.queue.name))
             return Promise.resolve(descriptor);
 
-        var queueInfo = { name: descriptor.ep.queue, options: { autoDelete: true, durable: false } };
+        var queueInfo = {
+            name: descriptor.ep.queue.name,
+            options: {
+                autoDelete: !descriptor.ep.queue.durable,
+                durable: descriptor.ep.queue.durable,
+            },
+        };
         debug('declareQueue', 'Declaring queue; name = ' + queueInfo.name + '; options = ' + util.inspect(queueInfo.options) + '.');
         return Promise
             .try(function() {
@@ -318,8 +335,8 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid)
                 return queueInfo;
             })
             .then(function(queueInfo) {
-                if (descriptor.ep.queue == '')
-                    descriptor.ep.queue = queueInfo.name;
+                if (descriptor.ep.queue.name == '')
+                    descriptor.ep.queue.name = queueInfo.name;
             })
             .return(descriptor);
     }
@@ -393,25 +410,31 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid)
             return parseAddress(a);
         }
 
-        var result = { address: value };
-        result.exchangeType = value.substr(0, index);
-        if (!result.exchangeType || (result.exchangeType != 'topic' && result.exchangeType != 'direct' && result.exchangeType != 'fanout'))
+        var u = url.parse(value), p = u.pathname.substr(1).split('/');
+        u.query = u.query || {};
+        var a = {
+            address: value,
+            exchange: {
+                type: (u.protocol || '').split(':')[0],
+                name: u.hostname,
+                durable: u.query['exchange.durable'] || u.query['ed'] || false,
+            },
+            queue: {
+                name: p.length > 1 ? p[1] : '',
+                durable: u.query['queue.durable'] || u.query['qd'] || false,
+            },
+            routingKey: p.length > 0 ? p[0] : undefined,
+        };
+        console.error(a);
+
+        if (!a.exchange.type || (a.exchange.type != 'topic' && a.exchange.type != 'direct' && a.exchange.type != 'fanout'))
             return undefined;
-
-        var remain = value.substr(index + 3);
-        index = remain.indexOf('/');
-        result.exchange = index >= 0 ? remain.substr(0, index) : undefined;
-        if (!result.exchange)
+        if (!a.exchange.name)
             throw new Error('Unable to determine exchange name in address string ' + value + '.');
+        if (!a.routingKey)
+            throw new Error('Unable to determine routing key in address string ' + value + '.');
 
-        remain = remain.substr(index + 1);
-        index = remain.indexOf('/');
-        result.routingKey = index >= 0 ? remain.substr(0, index) : remain;
-        if (!result.routingKey)
-            throw new Error('Unable to determine exchange name in address string ' + value + '.');
-
-        result.queue = index >= 0 ? remain.substr(index + 1) : '';
-        return result;
+        return a;
     }
 
     function send(address, bodyObject, properties) {
@@ -427,7 +450,7 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid)
         debug('send', 'Sending; to = ' + address + ", body = " + bodyObject.toString() + ", options = " + JSON.stringify(options) + '.');
         var sendAddress = me.parseAddress(address);
         return Promise.try(function() {
-            return channel.publish(sendAddress.exchange, sendAddress.routingKey, body, options);
+            return channel.publish(sendAddress.exchange.name, sendAddress.routingKey, body, options);
         });
     }
 
