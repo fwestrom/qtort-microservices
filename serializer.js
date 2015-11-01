@@ -31,7 +31,7 @@ exports.serialize = function(contentType, body) {
 
 exports.serializers = [
     {
-        supports(contentType, body) {
+        supports: function(contentType, body) {
             return /^application\/(octet-stream|font-|x-font-)|^font\/|^image\//
                 .test(contentType);
         },
@@ -43,7 +43,7 @@ exports.serializers = [
         },
     },
     {
-        supports(contentType, body) {
+        supports: function(contentType, body) {
             return /^application\/javascript|^text\//
                 .test(contentType);
         },
@@ -55,7 +55,7 @@ exports.serializers = [
         },
     },
     {
-        supports(contentType, body) {
+        supports: function(contentType, body) {
             return contentType === 'application/json';
         },
         deserialize: function(contentType, body) {
