@@ -114,6 +114,11 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid)
     var declaredQueues = [];
     declaredQueues.findByName = declaredExchanges.findByName.bind(declaredQueues);
 
+    var defaultExchange = {};
+    var defaultQueue = {};
+    defaultExchange = parseAddress(options.defaultExchange).exchange;
+    defaultQueue = parseAddress('routekey/' + options.defaultQueue).queue;
+
     function addDescriptor(addressOrEp, callback, isReply) {
         var ep = addressOrEp instanceof String || typeof addressOrEp == 'string' ? me.parseAddress(addressOrEp) : addressOrEp;
         if (!ep)
@@ -399,39 +404,33 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid)
     }
 
     function parseAddress(value) {
-        if (value instanceof Descriptor)
+        if (value instanceof Descriptor) {
             return value;
-        if (!value)
+        }
+        if (!value) {
             return undefined;
-
-        var index = value.indexOf('://');
-        if (index < 0) {
-            var a = options.defaultExchange + '/' + value + '/' + options.defaultQueue;
-            return parseAddress(a);
         }
 
-        var u = url.parse(value), p = (u.pathname || '/').substr(1).split('/');
-        u.query = u.query || {};
+        var m = /^(?:(\w*):\/\/([\w.-]*)(?=[/?$\n]))?(?:\/?([\w.*#-]*)(?=[/?$\n]))(?:\/([\w.-]*))?(?:[?&](?:ed|exchange\.?[dD]urable)=(\w+))?(?:[?&](?:qd|queue\.?[dD]urable)=(\w+))?/gm.exec(value + '\n');
+        if (!m) {
+            return undefined;
+        }
         var a = {
             address: value,
             exchange: {
-                type: (u.protocol || '').split(':')[0],
-                name: u.hostname,
-                durable: u.query['exchange.durable'] || u.query['ed'] || false,
+                type: m[1] || defaultExchange.type || 'topic',
+                name: m[2] || defaultExchange.name || '',
+                durable: m[5] || defaultExchange.durable || false,
             },
             queue: {
-                name: p.length > 1 ? p[1] : '',
-                durable: u.query['queue.durable'] || u.query['qd'] || false,
+                name: m[4] || defaultQueue.name || '',
+                durable: m[6] || defaultQueue.durable || false,
             },
-            routingKey: p.length > 0 ? p[0] : undefined,
+            routingKey: m[3] || '',
         };
 
         if (!a.exchange.type || (a.exchange.type != 'topic' && a.exchange.type != 'direct' && a.exchange.type != 'fanout'))
             return undefined;
-        if (!a.exchange.name)
-            throw new Error('Unable to determine exchange name in address string ' + value + '.');
-        if (!a.routingKey)
-            throw new Error('Unable to determine routing key in address string ' + value + '.');
 
         return a;
     }
