@@ -222,3 +222,5 @@ module.exports = function microservices(options, _, Promise, serializer) {
         };
     }
 };
+
+module.exports.crutch = require('./crutch.js');

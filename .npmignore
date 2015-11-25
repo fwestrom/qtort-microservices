@@ -17,7 +17,7 @@ node_modules
 
 .idea
 
-example
-example/*
+examples
+examples/*
 test
 test/*
