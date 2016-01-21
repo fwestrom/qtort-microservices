@@ -57,7 +57,7 @@ module.exports = function crutch(defaultOptions, callback) {
             })
             .then(function() {
                 log.info('Ready.');
-                return Promise.try(app.emit, 'ready');
+                return Promise.try(app.emit.bind(app), 'ready');
             })
             .return(app);
     });
