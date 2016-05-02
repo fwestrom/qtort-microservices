@@ -1,35 +1,42 @@
 {
-  "name": "ih-util-microservices",
-  "version": "0.1.2",
-  "description": "A simple micro-services framework for Node.js.",
-  "main": "./module.js",
-  "repository": "https://github.com/medseek-engineering/medseek-util-microservices.git",
-  "authors": [
-    { "name": "Fred Westrom", "email": "npm@qtort.com" }
-  ],
-  "dependencies": {
-    "amqplib": "^0.3.0"
-  },
-  "devDependencies": {
-    "bluebird": "^2.3.11",
-    "lodash": "^2.4.1",
-    "mocha": "^1.21.4",
-    "node-uuid": "^1.4.1",
-    "should": "^4.0.4",
-    "sinon": "^1.10.3"
-  },
-  "peerDependencies": {
-    "bluebird": "^2.3.11",
-    "lodash": "^2.4.1",
-    "node-uuid": "^1.4.1"
-  },
-  "keywords": [
-    "micro-services",
-    "microservices",
-    "amqp",
-    "rabbitmq"
-  ],
-  "scripts": {
-    "test": "node node_modules/mocha/bin/_mocha --reporter dot test --ll=WARN"
-  }
+    "name": "qtort-microservices",
+    "version": "1.1.1",
+    "description": "A simple micro-services framework for Node.js.",
+    "main": "./module.js",
+    "authors": [{
+        "name": "Fred Westrom",
+        "email": "npm@qtort.com"
+    }],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/fwestrom/qtort-microservices.git"
+    },
+    "dependencies": {
+        "amqplib": ">=0.4.0",
+        "bluebird": ">=2.10.2",
+        "lodash": ">=3.10.1",
+        "log4js": ">=0.6.21",
+        "minimist": ">=1.1.0",
+        "node-uuid": ">=1.4.2"
+    },
+    "devDependencies": {
+        "mocha": ">=1.21.4",
+        "should": ">=4.0.4",
+        "sinon": ">=1.10.3"
+    },
+    "keywords": [
+        "micro-services",
+        "microservices",
+        "qtort-microservices",
+        "microservice-crutch",
+        "amqp",
+        "rabbitmq",
+        "soa",
+        "service",
+        "services"
+    ],
+    "scripts": {
+        "crutch": "node crutch.js --ll=INFO",
+        "test": "node node_modules/mocha/bin/_mocha --reporter dot test --ll=WARN"
+    }
 }

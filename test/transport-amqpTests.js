@@ -41,9 +41,11 @@ describe('transport-amqp', function() {
         options = {
             defaultExchange: 'topic://test-' + uuid.v4(),
             defaultQueue: 'transport-amqp.test.' + uuid.v4(),
-            debug: false
+            channelPrefetch: 1,
+            debug: false,
         };
         transport = new AmqpTransport(options, undefined, amqplibObj);
+        transport.on('error', function(error) { /* TODO: Need an expectError and a test for this */ });
         actThen = function(doAssert) {
             return act().finally(doAssert);
         };
@@ -174,7 +176,7 @@ describe('transport-amqp', function() {
                             return Promise.try(function() {
                                 var consumerCallback = expectConsume.getCall(0).args[1];
                                 return consumerCallback(msg);
-                            });
+                            }).delay(1);
                         };
                         return promise;
                     });
@@ -197,27 +199,22 @@ describe('transport-amqp', function() {
                     });
 
                     it('does not acknowledge message if subscriber throws', function() {
-                        var expectedError = new Error('Test-Error');
-                        callback.throws(expectedError);
+                        callback.throws(new Error('Test-Error'));
                         expectAck.never();
-                        return actThenVerify(expectAck)
-                            .then(function() {
-                                throw new Error('Error was not produced.')
-                            })
-                            .catch(function(error) {
-                                error.should.be.exactly(expectedError);
-                            });
+                        return actThenVerify(expectAck);
                     });
 
                     it('raises error notification if subscriber throws', function() {
                         var expectedError = new Error('Test-Error');
+                        var raisedError = new Error('Error was not produced.');
                         callback.throws(expectedError);
+                        transport.once('error', function(error) {
+                            raisedError = error;
+                        });
                         return act()
+                            .delay(1)
                             .then(function() {
-                                throw new Error('Error was not produced.')
-                            })
-                            .catch(function(error) {
-                                error.should.be.exactly(expectedError);
+                                raisedError.should.be.exactly(expectedError);
                             });
                     })
                 });
@@ -284,7 +281,7 @@ describe('transport-amqp', function() {
             tc(t, 'a.b.#.z', 'a.b.c.x');
             tc(t, 'a.b.#.z', 'a.b.c.z', true);
             tc(t, 'a.b.#.z', 'a.b.z', true);
-            tc(t, 'a.b.#.z', 'a.x.z');
+            tc(t, 'a.b.#.z', 'a.b.z', true);
         });
 
         function tc(bindAddressExchangeType, bindAddressRoutingKey, receivedMessageRoutingKey, isMatch) {
@@ -312,12 +309,16 @@ describe('transport-amqp', function() {
             ];
             _.forEach(cases, function(rk) {
                 it(rk, function() {
-                    var result = transport.parseAddress(rk, true);
+                    var result = transport.parseAddress(rk);
                     result.should.have.properties({
-                        exchangeType: options.defaultExchange.split('://')[0],
-                        exchange: options.defaultExchange.split('://')[1],
-                        queue: options.defaultQueue,
-                        routingKey: rk
+                        routingKey: rk,
+                    });
+                    result.exchange.should.have.properties({
+                        type: options.defaultExchange.split('://')[0],
+                        name: options.defaultExchange.split('://')[1],
+                    });
+                    result.queue.should.have.properties({
+                        name: options.defaultQueue,
                     });
                 });
             });
@@ -328,32 +329,37 @@ describe('transport-amqp', function() {
             var exchangeNames = ['exchange-name', 'exchange.name'];
             var routingKeys = ['abc.*.ghi', 'abc.#.xyz', 'abc.#'];
             var queueNames = [undefined, '', 'qrs', 'qrs-tuv', 'Qrs.Tuv'];
+            var tails = [undefined, '?ed=1', '?ed=1&qd=1'];
             exchangeTypes.forEach(function(exchangeType) {
                 exchangeNames.forEach(function(exchangeName) {
                     routingKeys.forEach(function(routingKey) {
                         queueNames.forEach(function(queueName) {
-                            var value = exchangeType + '://' + exchangeName + '/' + routingKey;
-                            if (queueName)
-                                value += '/' + queueName;
+                            tails.forEach(function(tail) {
+                                var value = exchangeType + '://' + exchangeName + '/' + routingKey;
+                                if (queueName)
+                                    value += '/' + queueName;
+                                if (tail)
+                                    value += tail;
 
-                            it(value, function() {
-                                var result = transport.parseAddress(value);
-                                it('returns exchange type', function() {
-                                    result.should.have
-                                        .properties({ exchangeType: exchangeType });
-                                });
-                                it('returns exchange', function() {
-                                    result.should.have
-                                        .properties({ exchange: exchangeName });
-                                });
-                                it('returns routing key', function() {
-                                    result.should.have
-                                        .properties({ routingKey: routingKey });
-                                });
-                                it('returns queue', function() {
-                                    var expectedQueue = queueName ? queueName : '';
-                                    result.should.have
-                                        .properties({ queue: expectedQueue });
+                                it(value, function() {
+                                    var result = transport.parseAddress(value);
+                                    it('returns exchange type', function() {
+                                        result.exchange.should.have
+                                            .properties({ type: exchangeType });
+                                    });
+                                    it('returns exchange', function() {
+                                        result.exchange.should.have
+                                            .properties({ name: exchangeName });
+                                    });
+                                    it('returns routing key', function() {
+                                        result.should.have
+                                            .properties({ routingKey: routingKey });
+                                    });
+                                    it('returns queue', function() {
+                                        var expectedQueue = queueName ? queueName : '';
+                                        result.queue.should.have
+                                            .properties({ name: expectedQueue });
+                                    });
                                 });
                             });
                         });
