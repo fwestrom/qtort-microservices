@@ -3,7 +3,7 @@
 var _ = require('lodash');
 var events = require('events');
 var logging = require('log4js');
-var qtortMicroservices = require('./injectable/microservices');
+var microservices = require('./injectable/microservices');
 var minimist = require('minimist');
 var Promise = require('bluebird');
 var util = require('util');
@@ -26,7 +26,7 @@ module.exports = function crutch(defaultOptions, callback) {
         Promise: Promise,
         uuid: require('node-uuid'),
         serializer: require('qtort-microservices/serializer'),
-        'qtort-microservices': qtortMicroservices,
+        'qtort-microservices': microservices,
     }, defaultOptions.injectables));
 
     return inject(function(_, app, inject, logging, options) {
