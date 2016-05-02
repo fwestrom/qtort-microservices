@@ -22,7 +22,8 @@
     "devDependencies": {
         "mocha": ">=1.21.4",
         "should": ">=4.0.4",
-        "sinon": ">=1.10.3"
+        "sinon": ">=1.10.3",
+        "proxyquire": "^1.1.0"
     },
     "keywords": [
         "micro-services",
