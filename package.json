@@ -1,6 +1,6 @@
 {
     "name": "qtort-microservices",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "description": "A simple micro-services framework for Node.js.",
     "main": "./module.js",
     "authors": [{
@@ -30,6 +30,7 @@
         "microservices",
         "qtort-microservices",
         "microservice-crutch",
+        "medseek-util-microservices",
         "amqp",
         "rabbitmq",
         "soa",
@@ -38,6 +39,6 @@
     ],
     "scripts": {
         "crutch": "node crutch.js --ll=INFO",
-        "test": "node node_modules/mocha/bin/_mocha --reporter dot test --ll=WARN"
+        "test": "node node_modules/mocha/bin/_mocha --reporter spec test --ll=trace"
     }
 }

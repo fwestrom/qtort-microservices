@@ -23,13 +23,14 @@ util.inherits(AmqpTransport, Transport);
  * @param options.defaultExchange The default exchange.
  * @param [options.amqplib] An optional amqplib to use instead of the default module.
  */
-function AmqpTransport(options, _, amqplib, Promise, serializer, uuid)
-{
+function AmqpTransport(options, _, amqplib, Promise, serializer, uuid) {
     if (!(this instanceof AmqpTransport)) {
         return new AmqpTransport(options, _, amqplib, Promise, serializer, uuid);
     }
 
     Transport.call(this, 'AmqpTransport', options);
+    this.setMaxListeners(0);
+
 
     _ = _ || require('lodash');
     amqplib = amqplib || require('amqplib');
@@ -118,6 +119,7 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid)
     var defaultQueue = {};
     defaultExchange = parseAddress(options.defaultExchange).exchange;
     defaultQueue = parseAddress('routekey/' + options.defaultQueue).queue;
+
 
     function addDescriptor(addressOrEp, callback, isReply) {
         var ep = addressOrEp instanceof String || typeof addressOrEp == 'string' ? me.parseAddress(addressOrEp) : addressOrEp;
@@ -469,7 +471,7 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid)
         debug('start', 'Broker: ', brokerAddress);
         return Promise
             .try(function() {
-                return amqplib.connect(brokerAddress);
+                return connect(brokerAddress);
             })
             .then(function(newConnection) {
                 connection = newConnection;
@@ -495,6 +497,19 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid)
                 me.emit('ready');
             })
             .catch(onError);
+
+        function connect(to) {
+            return Promise.try(function() {
+                return amqplib.connect(to);
+            }).catch(function(error) {
+                if (!_.isNumber(options.connectRetry)) {
+                    throw error;
+                }
+
+                debug('start', 'Connection failed, retrying in', options.connectRetry, 'ms; error:', error);
+                return Promise.delay(delay).then(_.partial(connect, to));
+            });
+        }
     }
 
     function stop() {

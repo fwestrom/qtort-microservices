@@ -1,6 +1,6 @@
 var crutch = require('../crutch.js');
 var defaults = {
-    // medseek-util-microservices options
+    // qtort-microservices options
     defaultExchange: 'topic://example',
     defaultQueue: 'ping-sender',
     defaultReturnBody: true, // false returns message-context from .call/etc
@@ -15,7 +15,7 @@ var defaults = {
 };
 
 crutch(defaults, function(app, logging, microservices, options, Promise) {
-    var log = logging.getLogger('ping-sender');
+    var log = logging.getLogger('qtort-microservices.example.ping-sender');
     log.setLevel('INFO');
 
     // return a promise that is resolved when your application is ready

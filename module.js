@@ -8,8 +8,9 @@ var util = require('util');
  *
  * @module medseek-util-microservices
  */
-module.exports = function microservices(options, _, Promise, serializer) {
+module.exports = function microservices(_, options, Promise, serializer) {
     _ = _ || require('lodash');
+    options = options || {};
     Promise = Promise || require('bluebird');
     serializer = serializer || require('./serializer');
 

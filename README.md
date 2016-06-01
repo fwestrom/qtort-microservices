@@ -13,7 +13,7 @@ For the moment, see the files in the examples/ directory for usage.
 # microservice-crutch
 
 Provides a jump-start on implementing a micro-service compatible with
-micro-services using AMQP and the medseek-util-microservices module.
+micro-services using AMQP and the qtort-microservices module.
 
 This is a fork of the open-source project microservice-crutch that I started
 while at Influence Health.  You can check out their fork at

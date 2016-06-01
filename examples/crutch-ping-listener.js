@@ -8,7 +8,7 @@ var defaults = {
 };
 
 crutch(defaults, function(logging, microservices, options, Promise) {
-    var log = logging.getLogger('ping-listener');
+    var log = logging.getLogger('qtort-microservices.example.ping-listener');
     log.setLevel('INFO');
 
     return microservices.bind('example.ping', function(mc) {

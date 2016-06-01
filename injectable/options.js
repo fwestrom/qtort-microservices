@@ -15,6 +15,7 @@ module.exports = function(_, defaultOptions, minimist, util) {
         ],
         default: util._extend({
             broker: 'amqp://localhost',
+            connectRetry: 5000,
             defaultExchange: 'default-exchange',
             defaultQueue: undefined,
             'log.config': undefined,
@@ -32,7 +33,7 @@ module.exports = function(_, defaultOptions, minimist, util) {
         options.debug = options.debug.toString().toLowerCase() === true.toString().toLowerCase();
     }
 
-    options.log.level = (options.log.level || (options.debug ? 'DEBUG' : 'INFO')).toUpperCase();
+    options.log.level = (options.log.level || (options.debug ? 'DEBUG' : 'INFO'));
     options.log.replaceConsole = ('' + options.log.replaceConsole).toLowerCase() !== 'false';
 
     return options;

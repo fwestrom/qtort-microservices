@@ -1,36 +1,38 @@
 'use strict';
 
-module.exports = function microservices(_, app, inject, logging, options) {
-    var log = logging.getLogger('microservice-crutch.microservices');
-    log.debug('Initializing qtort-microservices module.');
+var ms;
 
-    return inject.resolve('qtort-microservices')
-        .then(function(microservices) {
-            return inject(microservices);
+module.exports = function microservices(_, app, inject, logging, options, Promise) {
+    if (ms) {
+        return ms;
+    }
+
+    var log = logging.getLogger('qtort-microservices.microservices');
+
+    var microservicesFactory = require('../module.js');
+    return inject(microservicesFactory)
+        .tap(function(ms) {
+            ms.on('error', onError);
+
+            var bind = ms.bind;
+            _.extend(ms, {
+                bindings: {},
+                bind: function(rk, action, opts) {
+                    ms.bindings[rk] = action;
+                    return bind(rk, action, opts);
+                },
+            });
         })
-        .then(function(ms) {
+        .tap(function(ms) {
             return inject(ms.AmqpTransport)
                 .then(function(transport) {
-                    var shutdownHandler = _.partial(onShutdown, ms, transport);
-                    app.once('shutdown-last', shutdownHandler);
-                    ms.on('error', onError);
                     if (transport.on) {
                         transport.on('error', onError);
                     }
+                    app.once('shutdown-last', _.partial(onShutdown, ms, transport));
                     return ms.useTransport(transport, options);
                 })
-                .return(ms);
         })
-        .then(function(ms) {
-            var bindings = {};
-            return _.defaults({
-                bindings: bindings,
-                bind: function(rk, action, opts) {
-                    bindings[rk] = action;
-                    return ms.bind(rk, action, opts);
-                },
-            }, ms);
-        });
 
     function onError(error) {
         if (app.listeners('error').length > 0) {

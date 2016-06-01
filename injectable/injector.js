@@ -2,17 +2,18 @@
 
 var _ = require('lodash');
 var Promise;
-
 var idMap = {
-    _: 'lodash'
+    _: 'lodash',
+    Promise: 'bluebird',
 };
 
-module.exports = _.partial(injector, { _: _ });
+module.exports = _.partial(injector, {
+    _: _,
+    lodash: _,
+});
 
 function injector(cache, injectables) {
-    if (!Promise) {
-        Promise = injectables.Promise || require('bluebird');
-    }
+    Promise = Promise || injectables.Promise || (injectables.Promise = require('bluebird'));
     return _.extend(_.partial(inject, cache, injectables), {
         child: _.partial(child, cache, injectables),
         resolve: function(id, overrides) {
@@ -28,15 +29,11 @@ function child(cache, injectables, overrides) {
 }
 
 function inject(cache, injectables, fn, overrides) {
-    return Promise.try(function() {
-        var re = /^function\s(?:\w+)?\(([^\)]*)\)/g;
-        var ids = _(re.exec(fn.toString())).drop(1).first().split(', ');
-        var resolver = _.partialRight(_.partial(resolve, cache, injectables), overrides);
-        return Promise.all(_.map(ids, resolver))
-            .then(function(values) {
-                return fn.apply(undefined, values);
-            });
-    });
+    var re = /^function\s(?:\w+)?\(([^\)]*)\)/g;
+    var ids = _(re.exec(fn.toString())).drop(1).first().split(', ');
+    return Promise
+        .map(ids, _.partial(resolve, cache, injectables, _, overrides))
+        .spread(fn);
 }
 
 function resolve(cache, injectables, id, overrides) {
@@ -48,20 +45,21 @@ function resolve(cache, injectables, id, overrides) {
         if (id === 'inject') {
             return injector(cache, injectables);
         }
-        var source = _.find([overrides, injectables, cache], function(x) { return x[id] !== undefined; });
+        var source = _.find(_.compact([overrides, injectables, cache]), function(x) { return x[id] !== undefined; });
         var module = source ? source[id] : undefined;
         if (!module) {
             var module = tryRequire('./' + id + '.js', true);
             if (module) {
-                return inject(cache, injectables, module, overrides)
-                    .tap(function(value) {
-                        //console.log('resolve| %s:', id, value);
-                        cache[id] = value;
-                    })
-                    .catch(function(error) {
-                        console.error('Error resolving injectable:', error);
-                        throw error;
-                    });
+                try {
+                    var value = inject(cache, injectables, module, overrides);
+                    //console.log('resolve| %s:', id, value);
+                    cache[id] = value;
+                    return value;
+                }
+                catch (error) {
+                    console.error('Error resolving injectable %s:', id, error);
+                    throw error;
+                }
             }
             else if (!module) {
                 module = tryRequire(id);
@@ -76,8 +74,7 @@ function resolve(cache, injectables, id, overrides) {
     });
 }
 
-function tryRequire(id, ignoreErrors)
-{
+function tryRequire(id, ignoreErrors) {
     try {
         var result = require(id);
         //console.log('tryRequire| id: %s, ignoreErrors: %s, result:', id, ignoreErrors, result);

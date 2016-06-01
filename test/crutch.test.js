@@ -4,6 +4,7 @@ describe('crutch', function() {
     var _ = require('lodash');
     var events = require('events');
     var log4js = require('log4js');
+    var logging = require('../injectable/logging.js')
     var Promise = require('bluebird');
     var proxyquire = require('proxyquire');
     var should = require('should');
@@ -31,8 +32,8 @@ describe('crutch', function() {
     var ms;
 
     before(function() {
-        return inject(function(logging, options) {
-            log = logging.getLogger('crutch.test');
+        return inject(function(options) {
+            log = log4js.getLogger('qtort-microservices.crutch.test');
             log.debug('before| Setting up');
             opts = options;
         });
@@ -41,6 +42,7 @@ describe('crutch', function() {
     beforeEach(function() {
         log.debug('beforeEach| Setting up');
         ms = _.extend(new events.EventEmitter(), {
+            transport: { name: 'stub-transport' },
             bind: sinon.spy(function(addr, cb) {
                 log.debug('bind| %s ->', addr, cb);
                 return Promise.resolve();
@@ -54,12 +56,11 @@ describe('crutch', function() {
         });
 
         crutch = _.partial(proxyquire('../crutch.js', {
-            'qtort-microservices': _.extend(function(options, serializer) {
+            '../module.js': _.extend(function(options, serializer) {
                 return ms;
             }, {
                 '@noCallThru': false,
-                //'@runtimeGlobal': true
-                //'@global': true
+                '@runtimeGlobal': true,
             })
         }), opts);
 

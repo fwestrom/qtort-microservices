@@ -1,6 +1,6 @@
 'use strict';
 
-module.exports = function logging(_, inject, log4js, options, Promise) {
+module.exports = function logging(_, log4js, options) {
     var config = options.log || {};
     _.defaults(config, {
         appenders: [
