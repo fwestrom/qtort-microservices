@@ -383,9 +383,9 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid) {
 
     function getReplyFn(mc) {
         return function reply(body, properties) {
-            properties = _.defaults(properties || {}, _.omit(mc.properties, 'replyTo'));
             var to = properties.replyTo || mc.properties.replyTo;
-            debug('reply', 'to: {0}, body = {1}, properties = {2}', to, body, properties);
+            properties = _.defaults(properties || {}, _.omit(mc.properties, 'replyTo'));
+            debug('reply', 'to: {0}, properties: {1}, body: {2}', to, properties, body);
             return send(to, body, properties);
         };
     }
@@ -499,16 +499,17 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid) {
             .catch(onError);
 
         function connect(to) {
-            return Promise.try(function() {
-                return amqplib.connect(to);
-            }).catch(function(error) {
-                if (!_.isNumber(options.connectRetry)) {
+            return Promise.try(
+                function() {
+                    return amqplib.connect(to);
+                })
+                .catch(function(error) {
+                    if (_.isNumber(options.connectRetry)) {
+                        debug('start', 'Connection failed, retrying in', options.connectRetry, 'ms; error:', error);
+                        return Promise.delay(options.connectRetry).then(_.partial(connect, to));
+                    }
                     throw error;
-                }
-
-                debug('start', 'Connection failed, retrying in', options.connectRetry, 'ms; error:', error);
-                return Promise.delay(delay).then(_.partial(connect, to));
-            });
+                });
         }
     }
 

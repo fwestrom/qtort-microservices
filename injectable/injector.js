@@ -13,7 +13,7 @@ module.exports = _.partial(injector, {
 });
 
 function injector(cache, injectables) {
-    Promise = Promise || injectables.Promise || (injectables.Promise = require('bluebird'));
+    Promise = injectables.Promise || cache.Promise || (cache.Promise = require('bluebird'));
     return _.extend(_.partial(inject, cache, injectables), {
         child: _.partial(child, cache, injectables),
         resolve: function(id, overrides) {

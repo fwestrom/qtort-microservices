@@ -8,8 +8,9 @@ var util = require('util');
  *
  * @module medseek-util-microservices
  */
-module.exports = function microservices(_, options, Promise, serializer) {
+module.exports = function microservices(_, logging, options, Promise, serializer) {
     _ = _ || require('lodash');
+    logging = logging || require('./injectable/logging');
     options = options || {};
     Promise = Promise || require('bluebird');
     serializer = serializer || require('./serializer');
@@ -17,6 +18,7 @@ module.exports = function microservices(_, options, Promise, serializer) {
     options.debug = options.debug && options.debug.toString().toLowerCase() === 'true';
     options.defaultReturnBody = ('' + options.defaultReturnBody).toString().toLowerCase() === 'true';
 
+    var log = logging.getLogger('qtort-microservices');
     var ms = util._extend(new events.EventEmitter(), {
         /**
          * Provides access to options that can be used to configure the micro-services
@@ -188,7 +190,7 @@ module.exports = function microservices(_, options, Promise, serializer) {
 
     function debug(/*label, arg1, ...*/) {
         if (options.debug) {
-            arguments[0] = '[medseek-util-microservices.' + arguments[0] + ']';
+            arguments[0] = '[qtort-microservices.' + arguments[0] + ']';
             console.log.apply(util, arguments);
         }
     }
@@ -198,8 +200,11 @@ module.exports = function microservices(_, options, Promise, serializer) {
     }
 
     function getBindCallback(action, opts, label) {
-        opts = opts || {};
-        opts.returnBody = opts.returnBody || options.defaultReturnBody;
+        opts = _.defaults(opts || {}, {
+            returnBody: options.defaultReturnBody,
+            errorStyle: options.defaultErrorStyle,
+        });
+
         return function(mc, rc) {
             return Promise
                 .try(function(state) {
@@ -209,13 +214,38 @@ module.exports = function microservices(_, options, Promise, serializer) {
                         ? action(mc.deserialize(), mc, rc)
                         : action(mc, rc);
                 })
-                .then(function(result) {
-                    if (result !== undefined && mc.reply) {
-                        return mc.reply(result);
+                .catch(function(error) {
+                    log.warn('bind.callback| error:', error);
+                    if (mc.reply && opts.errorStyle === 'http') {
+                        var statusCode = _.get(error, 'status.code') || 500;
+                        return {
+                            status: {
+                                code: statusCode,
+                                message: _.get(error, 'status.message') || (statusCode === 500 ? 'Internal Server Error' : undefined),
+                            },
+                            error: error,
+                        };
                     }
-                    else if (result !== undefined) {
+
+                    throw error;
+                })
+                .then(function(result) {
+                    if (result !== undefined) {
+                        var properties = {};
+                        if (opts.errorStyle === 'http') {
+                            _.extend(properties, {
+                                status: {
+                                    code: _.get(body, 'status.code') || 200,
+                                    message: _.get(body, 'status.message'),
+                                },
+                            });
+                        }
+                        if (mc.reply) {
+                            return mc.reply(result, properties);
+                        }
                         throw _.extend(new Error('Cannot send reply.'), {
                             messageContext: mc,
+                            properties: properties,
                             result: result
                         });
                     }

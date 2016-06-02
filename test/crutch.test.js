@@ -3,8 +3,6 @@
 describe('crutch', function() {
     var _ = require('lodash');
     var events = require('events');
-    var log4js = require('log4js');
-    var logging = require('../injectable/logging.js')
     var Promise = require('bluebird');
     var proxyquire = require('proxyquire');
     var should = require('should');
@@ -32,8 +30,8 @@ describe('crutch', function() {
     var ms;
 
     before(function() {
-        return inject(function(options) {
-            log = log4js.getLogger('qtort-microservices.crutch.test');
+        return inject(function(logging, options) {
+            log = logging.getLogger('qtort-microservices.crutch.test');
             log.debug('before| Setting up');
             opts = options;
         });

@@ -1,5 +1,6 @@
 "use strict";
 
+var _ = require('lodash');
 var Promise = require('bluebird');
 var should = require('should');
 var sinon = require('sinon');
@@ -11,6 +12,7 @@ describe('module', function() {
     var action;
     var expectStart;
     var expectStop;
+    var inject;
     var messageContext;
     var microservices;
     var observable;
@@ -29,7 +31,10 @@ describe('module', function() {
             defaultQueue: 'transport-amqp.test.' + uuid.v4(),
             debug: false
         };
-        microservices = require('../')({});
+        inject = require('../injectable/injector')({
+            defaultOptions: options,
+            serializer: require('../serializer'),
+        });
         transportObj = new (require('../transport.js'))('Test-Transport', { debug: true });
         transport = sinon.mock(transportObj);
         value1 = { a: Math.random() };
@@ -44,11 +49,14 @@ describe('module', function() {
             });
         };
 
-        return Promise.try(function() {
-            return microservices.useTransport(transportObj, options);
-        }).tap(function(disposable) {
-            transportDisposable = disposable;
-        });
+        return inject(require('../module'))
+            .then(function(ms) {
+                microservices = ms;
+                return microservices.useTransport(transportObj, options)
+                    .then(function(disposable) {
+                        transportDisposable = disposable;
+                    });
+            });
     });
 
     afterEach(function() {
