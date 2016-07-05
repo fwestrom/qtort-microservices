@@ -166,8 +166,9 @@ module.exports = function microservices(_, logging, options, Promise, serializer
          * message, error, or timeout.
          */
         call: function(address, body, properties, opts) {
-            opts = opts || {};
-            opts.returnBody = opts.returnBody || options.defaultReturnBody;
+            opts = _.defaults(opts || {}, {
+                returnBody: options.defaultReturnBody
+            });
             return ms.transport.call(address, body, properties, opts)
                 .then(function(mc) {
                     updateMessageContext(mc);
