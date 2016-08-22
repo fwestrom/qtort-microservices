@@ -447,7 +447,7 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid) {
 
         debug('send.serialize', 'contentType = {0}, bodyObject = {1}', options.contentType, bodyObject);
         var body = serializer.serialize(options.contentType, bodyObject);
-        debug('send', 'Sending; to = ' + address + ", body = " + bodyObject.toString() + ", options = " + JSON.stringify(options) + '.');
+        debug('send', 'Sending; to = ' + address + ", body = " + JSON.stringify(bodyObject || {}) + ", options = " + JSON.stringify(options) + '.');
         var sendAddress = me.parseAddress(address);
         return Promise.try(function() {
             return channel.publish(sendAddress.exchange.name, sendAddress.routingKey, body, options);
