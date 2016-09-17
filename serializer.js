@@ -6,6 +6,9 @@
  * @returns Object The deserialized body object.
  */
 exports.deserialize = function(contentType, body) {
+    
+    if(contentType==undefined)
+        contentType="application/json";
     var serializer = getSerializer(contentType, body);
     if (serializer)
         return serializer.deserialize(contentType, body);
