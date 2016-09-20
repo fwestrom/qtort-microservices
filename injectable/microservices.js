@@ -24,7 +24,7 @@ module.exports = function microservices(_, app, inject, logging, options, Promis
             });
         })
         .tap(function(ms) {
-            return inject(ms.AmqpTransport)
+            return inject(ms.ZmqTransport)
                 .then(function(transport) {
                     if (transport.on) {
                         transport.on('error', onError);

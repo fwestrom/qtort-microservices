@@ -1,47 +1,29 @@
 {
-  "name": "qtort-microservices",
-  "version": "1.1.4",
-  "description": "A simple micro-services framework for Node.js.",
-  "main": "./module.js",
-  "authors": [
-    {
-      "name": "Fred Westrom",
-      "email": "npm@qtort.com"
-    }
-  ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/fwestrom/qtort-microservices.git"
-  },
+  "name": "microservice-crutch",
+  "version": "1.0.5",
+  "description": "Makes it easy to write a micro-service with qtort-microservices+AMQP.",
+  "main": "./crutch.js",
+  "repository": "https://github.com/fwestrom/microservice-crutch.git",
   "dependencies": {
-    "amqplib": "~0.4.1",
-    "bluebird": "~3.4.0",
-    "lodash": "~4.13.1",
-    "log4js": "^0.6.36",
-    "minimist": "~1.2.0",
-    "node-uuid": "~1.4.7"
+    "amqplib": ">=0.4.0",
+    "bluebird": ">=2.10.2",
+    "lodash": ">=3.10.1",
+    "log4js": ">=0.6.21",
+    "qtort-microservices": ">=1.0.6",
+    "minimist": ">=1.1.0",
+    "node-uuid": ">=1.4.2"
   },
   "devDependencies": {
-    "mocha": "^2.5.3",
-    "proxyquire": "^1.1.0",
-    "should": "^8.3.1",
-    "sinon": "^1.17.4"
+    "gulp": "^3.8.9",
+    "gulp-mocha": "^1.1.1",
+    "gulp-util": "^3.0.1",
+    "mocha": "^2.0.1",
+    "proxyquire": "^1.0.1",
+    "should": "^4.1.0",
+    "sinon": "^1.11.1"
   },
-  "keywords": [
-    "micro-services",
-    "microservices",
-    "qtort-microservices",
-    "microservice-crutch",
-    "medseek-util-microservices",
-    "amqp",
-    "rabbitmq",
-    "soa",
-    "service",
-    "services"
-  ],
   "scripts": {
-    "crutch": "node crutch.js --ll=INFO",
-    "test": "node node_modules/mocha/bin/_mocha --reporter spec test --log.replaceConsole=false --ll=warn",
-    "test-watch": "node node_modules/mocha/bin/_mocha --reporter min --watch test --log.replaceConsole=false --ll=warn"
+    "self": "node crutch.js --ll=DEBUG",
+    "test": "node node_modules/mocha/bin/mocha test --ll=WARN"
   }
 }
