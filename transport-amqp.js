@@ -510,11 +510,6 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid) {
                         process.exit(1);
                     });
                 }
-                if (channel.on) {
-                    channel.on('return', function(msg) {
-                        console.warn('channel|return| msg:', msg);
-                    });
-                }
             })
             .then(function() {
                 debug('start', 'Ready');
