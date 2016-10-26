@@ -18,6 +18,7 @@ module.exports = function(_, defaultOptions, minimist, util) {
             connectRetry: 5000,
             defaultExchange: 'default-exchange',
             defaultQueue: undefined,
+            defaultMandatory: true,
             'log.config': undefined,
             'log.level': undefined,
             'log.refresh': undefined,

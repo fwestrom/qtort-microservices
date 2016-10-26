@@ -14,7 +14,7 @@
     "url": "https://github.com/fwestrom/qtort-microservices.git"
   },
   "dependencies": {
-    "amqplib": "~0.4.1",
+    "amqplib": "~0.4.2",
     "bluebird": "~3.4.0",
     "lodash": "~4.13.1",
     "log4js": "^0.6.36",

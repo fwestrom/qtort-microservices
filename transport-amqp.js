@@ -439,19 +439,39 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid) {
 
     function send(address, bodyObject, properties) {
         properties = properties || {};
-        var options = {
+        var opts = {
+            messageId: uuid.v4().replace(/-/g, ''),
+            mandatory: properties.mandatory || _.get(options, 'defaultMandatory'),
             contentType: properties.contentType || 'application/json',
             replyTo: properties.replyTo,
-            headers: _.omit(properties, ['contentType', 'replyTo'])
+            headers: _.omit(properties, ['contentType', 'mandatory', 'replyTo']),
         };
 
-        debug('send.serialize', 'contentType = {0}, bodyObject = {1}', options.contentType, bodyObject);
-        var body = serializer.serialize(options.contentType, bodyObject);
-        debug('send', 'Sending; to = ' + address + ", body = " + bodyObject.toString() + ", options = " + JSON.stringify(options) + '.');
+        debug('send.serialize', 'contentType = {0}, bodyObject = {1}', opts.contentType, bodyObject);
+        var body = serializer.serialize(opts.contentType, bodyObject);
+        debug('send', 'Sending; to = ' + address + ", body = " + bodyObject.toString() + ", opts = " + JSON.stringify(opts) + '.');
         var sendAddress = me.parseAddress(address);
-        return Promise.try(function() {
-            return channel.publish(sendAddress.exchange.name, sendAddress.routingKey, body, options);
-        });
+
+        var state = { returned: false };
+        channel.once('return', onChannelReturn);
+        return new Promise(
+            (resolve, reject) => {
+                channel.publish(sendAddress.exchange.name, sendAddress.routingKey, body, opts, (error, ok) =>
+                    error ? reject(error) : resolve(ok));
+            })
+            .finally(() => channel.removeListener('return', onChannelReturn))
+            .catch(onError)
+            .tap(result => {
+                if (state.returned) {
+                    throw _.assign(new Error(_.get(state.returned, 'fields.replyText') || 'returned'), _.get(state.returned, 'fields'));
+                }
+            });
+
+        function onChannelReturn(msg) {
+            if (msg.properties.messageId === opts.messageId) {
+                state.returned = msg;
+            }
+        }
     }
 
     function start() {
@@ -475,7 +495,7 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid) {
             })
             .then(function(newConnection) {
                 connection = newConnection;
-                return connection.createChannel();
+                return connection.createConfirmChannel();
             })
             .then(function(createdChannel) {
                 channel = createdChannel;
@@ -488,6 +508,11 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid) {
                     connection.on('error', function(error) {
                         console.error(error);
                         process.exit(1);
+                    });
+                }
+                if (channel.on) {
+                    channel.on('return', function(msg) {
+                        console.warn('channel|return| msg:', msg);
                     });
                 }
             })
