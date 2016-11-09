@@ -511,7 +511,7 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid) {
                         process.exit(1);
                     });
                 }
-                if (channel.on) {
+                if (channel.on && !options.defaultMandatory) {
                     channel.on('return', function(msg) {
                         console.warn('channel|return| msg:', msg);
                     });
