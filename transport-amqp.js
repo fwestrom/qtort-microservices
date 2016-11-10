@@ -453,7 +453,7 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid) {
         var sendAddress = me.parseAddress(address);
 
         var state = { returned: false };
-        channel.once('return', onChannelReturn);
+        channel.on('return', onChannelReturn);
         return new Promise(
             (resolve, reject) => {
                 channel.publish(sendAddress.exchange.name, sendAddress.routingKey, body, opts, (error, ok) =>
@@ -499,6 +499,7 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid) {
             })
             .then(function(createdChannel) {
                 channel = createdChannel;
+                channel.setMaxListeners(0);
                 if (options.channelPrefetch) {
                     return channel.prefetch(options.channelPrefetch);
                 }
@@ -508,6 +509,11 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid) {
                     connection.on('error', function(error) {
                         console.error(error);
                         process.exit(1);
+                    });
+                }
+                if (channel.on && !options.defaultMandatory) {
+                    channel.on('return', function(msg) {
+                        console.warn('channel|return| msg:', msg);
                     });
                 }
             })
