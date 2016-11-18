@@ -1,6 +1,6 @@
 {
   "name": "ih-util-microservices",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "A simple micro-services framework for Node.js.",
   "main": "./module.js",
   "repository": "https://github.com/medseek-engineering/medseek-util-microservices.git",
