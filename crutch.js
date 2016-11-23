@@ -23,7 +23,7 @@ module.exports = function crutch(defaultOptions, callback) {
         app: _.bindAll(new events.EventEmitter()),
         defaultOptions: defaultOptions,
         Promise: Promise,
-        uuid: require('node-uuid'),
+        uuid: require('uuid'),
         serializer: require('./serializer.js'),
         'qtort-microservices': microservices,
     }, defaultOptions.injectables));

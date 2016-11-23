@@ -4,7 +4,7 @@ var _ = require('lodash');
 var Promise = require('bluebird');
 var should = require('should');
 var sinon = require('sinon');
-var uuid = require('node-uuid');
+var uuid = require('uuid');
 
 describe('module', function() {
     var a = { 1: 1 }, b = { 2: 2 }, c = { 3: 3 }, d = { 4: 4 };
