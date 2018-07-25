@@ -29,11 +29,18 @@ function child(cache, injectables, overrides) {
 }
 
 function inject(cache, injectables, fn, overrides) {
-    var re = /^function\s(?:\w+)?\(([^\)]*)\)/g;
-    var ids = _(re.exec(fn.toString())).drop(1).first().split(', ');
-    return Promise
-        .map(ids, _.partial(resolve, cache, injectables, _, overrides))
-        .spread(fn);
+    var re = /^function\s?(?:\w+)?\(([^\)]*)\)/g;
+    var reresult = _(re.exec(fn.toString()));
+    try {
+        var ids = reresult.drop(1).first().split(', ');
+        return Promise
+            .map(ids, _.partial(resolve, cache, injectables, _, overrides))
+            .spread(fn);
+    }
+    catch (error) {
+        console.log('inject| error:', error, '\nreresult:\n', reresult, '\nfn:\n', fn);
+        process.exit(-1);
+    }
 }
 
 function resolve(cache, injectables, id, overrides) {
