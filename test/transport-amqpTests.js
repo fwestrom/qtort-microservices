@@ -3,7 +3,7 @@
 var _ = require('lodash');
 var Promise = require('bluebird')
 var sinon = require('sinon');
-var uuid = require('node-uuid');
+var uuid = require('uuid');
 
 var AmqpTransport = require('../transport-amqp.js');
 

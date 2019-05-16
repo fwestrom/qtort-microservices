@@ -36,7 +36,7 @@ function AmqpTransport(options, _, amqplib, Promise, serializer, uuid) {
     amqplib = amqplib || require('amqplib');
     Promise = Promise || require('bluebird');
     serializer = serializer || require('./serializer');
-    uuid = uuid || require('node-uuid');
+    uuid = uuid || require('uuid');
 
     /**
      * Binds an endpoint at the specified address.

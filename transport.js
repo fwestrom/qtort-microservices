@@ -2,7 +2,7 @@
 
 var events = require('events');
 var util = require('util');
-var uuid = require('node-uuid');
+var uuid = require('uuid');
 
 /**
  * Provides a skeleton for transports used with the micro-services module.
